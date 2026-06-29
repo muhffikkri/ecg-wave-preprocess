@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ECG Preprocessing Analytics Workbench</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        margin: 20px;
+        background: #f5f5f7;
+        color: #1d1d1f;
+      }
+      .workbench {
+        display: flex;
+        gap: 20px;
+      }
+      .controls {
+        width: 320px;
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        height: fit-content;
+      }
+      .display-panel {
+        flex-grow: 1;
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      }
+      .grid-canvas {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+      }
+      .chart-container {
+        background: #fafafa;
+        border: 1px solid #e5e5e7;
+        border-radius: 8px;
+        padding: 10px;
+        height: 220px;
+      }
+      .control-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        font-weight: bold;
+        font-size: 0.85em;
+        margin-bottom: 5px;
+        color: #515154;
+      }
+      input,
+      select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #d2d2d7;
+        border-radius: 6px;
+        box-sizing: border-box;
+      }
+      .metric-card {
+        background: #e3effa;
+        padding: 10px;
+        border-radius: 6px;
+        margin-top: 10px;
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Wearable ECG Edge Computing Workbench</h2>
+    <div class="workbench">
+      <div class="controls">
+        <h3>DSP Parameters</h3>
+        <div class="control-group">
+          <label>Dataset</label>
+          <select id="dataset" onchange="loadRecordOptions()">
+            <option value="ptbxl_100hz">PTB-XL (100Hz)</option>
+            <option value="ptbxl_500hz">PTB-XL (500Hz)</option>
+            <option value="chapman">Chapman (500Hz)</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Record ID</label>
+          <select id="record_id"></select>
+        </div>
+        <div class="control-group">
+          <label>Target Sampling Rate (Hz)</label>
+          <input type="number" id="target_fs" value="250" />
+        </div>
+        <hr />
+        <div class="control-group">
+          <label>Wavelet Type</label>
+          <select id="wavelet">
+            <option value="db4">db4</option>
+            <option value="sym4">sym4</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Wavelet Level</label>
+          <input type="range" id="w_level" min="1" max="6" value="4" />
+        </div>
+        <div class="control-group">
+          <label>Median Filter Kernel Size</label>
+          <input type="number" id="median_kernel" value="51" step="2" />
+        </div>
+        <div class="control-group">
+          <label>Butterworth Lowcut (Hz)</label>
+          <input type="number" id="lowcut" value="0.5" step="0.1" />
+        </div>
+        <div class="control-group">
+          <label>Butterworth Highcut (Hz)</label>
+          <input type="number" id="highcut" value="45.0" step="1" />
+        </div>
+        <button onclick="triggerProcessing()" style="width: 100%; padding: 10px; background: #0071e3; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer">Update Pipeline</button>
+
+        <div class="metric-card" id="hardware_metrics">Latency: -- ms<br />Peak RAM: -- MB</div>
+      </div>
+
+      <div class="display-panel">
+        <div class="grid-canvas">
+          <div><h3>Raw Signal (Original Scale)</h3></div>
+          <div><h3>Processed Resampled Signal</h3></div>
+
+          <div class="chart-container"><canvas id="raw_lead_0"></canvas></div>
+          <div class="chart-container"><canvas id="clean_lead_0"></canvas></div>
+          <div class="chart-container"><canvas id="raw_lead_1"></canvas></div>
+          <div class="chart-container"><canvas id="clean_lead_1"></canvas></div>
+          <div class="chart-container"><canvas id="raw_lead_2"></canvas></div>
+          <div class="chart-container"><canvas id="clean_lead_2"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let charts = {};
+
+      function initChart(canvasId, label) {
+        const ctx = document.getElementById(canvasId).getContext("2d");
+        return new Chart(ctx, {
+          type: "line",
+          data: { labels: [], datasets: [{ label: label, data: [], borderColor: "#ff453a", borderWidth: 1, pointRadius: 0, fill: false }] },
+          options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { ticks: { font: { size: 8 } } } }, plugins: { legend: { display: false } } },
+        });
+      }
+
+      // Inisialisasi awal 6 kanvas grafik Chart.js
+      for (let i = 0; i < 3; i++) {
+        charts[`raw_${i}`] = initChart(`raw_lead_${i}`, `Raw Lead ${i + 1}`);
+        charts[`clean_${i}`] = initChart(`clean_lead_${i}`, `Clean Lead ${i + 1}`);
+      }
+
+      async function loadRecordOptions() {
+        const res = await fetch("http://127.0.0.1:8000/api/records");
+        const data = await res.json();
+        const dataset = document.getElementById("dataset").value;
+        const recordSelect = document.getElementById("record_id");
+        recordSelect.innerHTML = "";
+        data[dataset].forEach((id) => {
+          let opt = document.createElement("option");
+          opt.value = id;
+          opt.innerText = id;
+          recordSelect.appendChild(opt);
+        });
+      }
+
+      async function triggerProcessing() {
+        const d = document.getElementById("dataset").value;
+        const r = document.getElementById("record_id").value;
+        const t_fs = document.getElementById("target_fs").value;
+        const wav = document.getElementById("wavelet").value;
+        const lvl = document.getElementById("w_level").value;
+        const med = document.getElementById("median_kernel").value;
+        const low = document.getElementById("lowcut").value;
+        const high = document.getElementById("highcut").value;
+
+        const url = `http://127.0.0.1:8000/api/process?dataset=${d}&record_id=${r}&target_fs=${t_fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}`;
+        const res = await fetch(url);
+        const result = await res.json();
+
+        // Update metrik simulasi edge hardware
+        document.getElementById("hardware_metrics").innerHTML = `Latency: ${result.metrics.latency_ms.toFixed(2)} ms<br>Peak RAM: ${result.metrics.peak_memory_mb.toFixed(4)} MB`;
+
+        // Update Grafik Kontrol
+        for (let i = 0; i < 3; i++) {
+          const rawData = result.raw_signals[`lead_${i}`];
+          const cleanData = result.clean_signals[`lead_${i}`];
+
+          charts[`raw_${i}`].data.labels = Array.from({ length: rawData.length }, (_, i) => i);
+          charts[`raw_${i}`].data.datasets[0].data = rawData;
+          charts[`raw_${i}`].update("none"); // Update cepat tanpa animasi overhead
+
+          charts[`clean_${i}`].data.labels = Array.from({ length: cleanData.length }, (_, i) => i);
+          charts[`clean_${i}`].data.datasets[0].data = cleanData;
+          charts[`clean_${i}`].update("none");
+        }
+      }
+
+      window.onload = async () => {
+        await loadRecordOptions();
+        triggerProcessing();
+      };
+    </script>
+  </body>
+</html>
