@@ -1,35 +1,58 @@
-# data_layer.py
+# src/data/data_layer.py
 import os
 import scipy.io
 import wfdb
 import numpy as np
+from functools import lru_cache
+import src.config as cfg # Import konfigurasi global
 
-BASE_DIR = r"C:\Users\muhffikkri\Desktop\ecg-wave-preproccess\dataset"
-
+@lru_cache(maxsize=1)
 def get_available_records():
-    """Menyisir berkas sampel yang tersedia"""
+    """Memindai direktori secara dinamis berbasis path dari config.py"""
     records = {
-        "chapman": ["JS00001", "JS00002"],
-        "ptbxl_100hz": ["00001_lr", "00002_lr", "00003_lr", "00004_lr"],
-        "ptbxl_500hz": ["00001_hr", "00002_hr"] # Mengikuti struktur folder Anda
+        "chapman": [],
+        "ptbxl_100hz": [],
+        "ptbxl_500hz": []
     }
+    
+    # 1. Scan Chapman
+    if os.path.exists(cfg.CHAPMAN_DIR):
+        records["chapman"] = sorted(list(set([
+            os.path.splitext(f)[0] for f in os.listdir(cfg.CHAPMAN_DIR) if f.endswith('.mat')
+        ])))
+        
+    # 2. Scan PTB-XL 100Hz
+    if os.path.exists(cfg.PTBXL_100HZ_DIR):
+        records["ptbxl_100hz"] = sorted(list(set([
+            os.path.splitext(f)[0] for f in os.listdir(cfg.PTBXL_100HZ_DIR) if f.endswith('.hea')
+        ])))
+        
+    # 3. Scan PTB-XL 500Hz
+    if os.path.exists(cfg.PTBXL_500HZ_DIR):
+        records["ptbxl_500hz"] = sorted(list(set([
+            os.path.splitext(f)[0] for f in os.listdir(cfg.PTBXL_500HZ_DIR) if f.endswith('.hea')
+        ])))
+        
     return records
 
-def load_raw_signal(dataset_type, record_id, lead_indices=[0, 1, 2]):
-    """Memuat matriks sinyal mentah [T, C] dan sampling rate aslinya"""
+
+def load_raw_signal(dataset_type, record_id):
+    """Memuat sinyal EKG mentah menggunakan konstanta dari config.py"""
+    if not record_id:
+        raise ValueError("Record ID tidak boleh kosong.")
+        
     if dataset_type == "chapman":
-        path = os.path.join(BASE_DIR, "chapman", "sample", f"{record_id}.mat")
-        mat_data = scipy.io.load_map(path) if hasattr(scipy.io, 'load_map') else scipy.io.loadmat(path)
-        # Chapman menyimpan data dengan dimensi [Channels, Timesteps], kita transpose ke [T, C]
+        path = os.path.join(cfg.CHAPMAN_DIR, f"{record_id}.mat")
+        mat_data = scipy.io.loadmat(path)
         data = mat_data['val'].T
         fs = 500.0
-    else: # ptbxl
-        sub_folder = "sample_100hz" if "lr" in record_id else "sample_500hz"
-        path = os.path.join(BASE_DIR, "ptbxl", sub_folder, record_id)
+    else:
+        sub_folder = cfg.PTBXL_100HZ_DIR if dataset_type == "ptbxl_100hz" else cfg.PTBXL_500HZ_DIR
+        path = os.path.join(sub_folder, record_id)
+        
         record, meta = wfdb.rdsamp(path)
         data = record
         fs = float(meta['fs'])
         
-    # Ambil 3 lead pertama (I, II, III) sesuai kebutuhan visualisasi
-    signal_3lead = data[:, lead_indices]
-    return signal_3lead, fs
+    # Slicing otomatis menggunakan settingan DEFAULT_LEADS dari config
+    return data[:, cfg.DEFAULT_LEADS], fs
