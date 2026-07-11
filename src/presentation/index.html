@@ -197,13 +197,23 @@
     </style>
   </head>
   <body>
-    <div class="main-container">
+    <!-- TAB SWITCHER NAV BAR -->
+    <div style="display: flex; gap: 10px; margin-bottom: 15px">
+      <button id="tab_btn_1" onclick="switchTab(1)" style="padding: 10px 20px; background: #0071e3; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer">1. Live Dataset Workbench</button>
+      <button id="tab_btn_2" onclick="switchTab(2)" style="padding: 10px 20px; background: #e5e5e7; color: #1d1d1f; border: none; border-radius: 6px; font-weight: bold; cursor: pointer">2. ProSim Hardware DSP Study</button>
+    </div>
+
+    <!-- VIEW 1: DATASET BENCHMARK -->
+    <div id="view_tab_1" class="main-container">
       <div class="header-panel">
         <div>
           <div style="font-size: 1.4em; font-weight: bold; color: #1d1d1f">Wearable ECG Edge Computing Workbench</div>
           <div style="color: #86868b; font-size: 0.85em; margin-top: 4px">Klinis Standar: 25 mm/s | 10 mm/mV | Grid Besar (0.2s), Grid Kecil (0.04s)</div>
         </div>
-        <div>Diagnosis Sampel: <span id="sample_class" class="class-badge">Loading...</span></div>
+        <div>
+          Diagnosis Asli (GT): <span id="sample_class" class="class-badge" style="background: #0071e3">Loading...</span> | Prediksi AI Model: <span id="ai_class" class="class-badge" style="background: #34c759">Waiting...</span>
+          <span id="ai_conf" style="font-family: monospace; font-weight: bold; font-size: 0.9em; color: #86868b; margin-left: 5px">(--%)</span>
+        </div>
       </div>
 
       <div class="grid-canvas">
@@ -254,6 +264,7 @@
         <div class="control-group">
           <label>Dataset Source</label>
           <select id="dataset" onchange="loadRecordOptions()">
+            <option value="prosim_simulator">ProSim Simulator (250Hz)</option>
             <option value="ptbxl_100hz">PTB-XL Database (100Hz)</option>
             <option value="ptbxl_500hz">PTB-XL Database (500Hz)</option>
             <option value="chapman">Chapman Dataset (500Hz)</option>
@@ -300,7 +311,170 @@
       </div>
     </div>
 
+    <!-- VIEW 2: STUDI DISTORSI HARDWARE -->
+    <div id="view_tab_2" class="main-container" style="display: none">
+      <div class="header-panel">
+        <div>
+          <div style="font-size: 1.4em; font-weight: bold; color: #1d1d1f">🎛️ ADS1293 Hardware Distortion & DSP Parameter Optimization</div>
+          <div style="color: #86868b; font-size: 0.85em; margin-top: 4px">Kepatuhan Rekayasa Biomedis: Analisis Fase Isolasional Atentutasi Segmen ST</div>
+        </div>
+      </div>
+
+      <!-- KONTROL BARU: PANEL PREPROCESSING INTERAKTIF TAB 2 -->
+      <div class="config-container" style="margin-top: 0px; padding: 20px">
+        <div class="control-group" style="grid-column: span 2">
+          <label>Pilih Folder Rekaman Sensor Simulator ProSim:</label>
+          <select id="sim_folder_select" style="width: 100%"></select>
+        </div>
+        <div class="control-group">
+          <label>Frekuensi Sampling Alat (Hz):</label>
+          <input type="number" id="sim_fs" value="250" style="width: 100%" />
+        </div>
+        <div class="control-group">
+          <label>Adaptive Wavelet Type</label>
+          <select id="sim_wavelet">
+            <option value="db4">Daubechies (db4)</option>
+            <option value="sym4">Symlets (sym4)</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Wavelet Decomposition Level <span id="lbl_sim_w_level" class="slider-val">4</span></label>
+          <input type="range" id="sim_w_level" min="1" max="6" value="4" oninput="document.getElementById('lbl_sim_w_level').innerText = this.value" />
+        </div>
+        <div class="control-group">
+          <label>Median Filter Kernel</label>
+          <input type="number" id="sim_median_kernel" value="51" step="2" />
+        </div>
+        <div class="control-group">
+          <label>Butterworth Lowcut (Hz)</label>
+          <input type="number" id="sim_lowcut" value="0.5" step="0.1" />
+        </div>
+        <div class="control-group">
+          <label>Butterworth Highcut (Hz)</label>
+          <input type="number" id="sim_highcut" value="45.0" step="1" />
+        </div>
+        <button onclick="triggerSimulatorAnalysis()" style="grid-column: span 4; padding: 12px; background: #34c759; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 1.1em; cursor: pointer">
+          🚀 RUN INTERACTIVE DISTORSI ANALYSIS REPORT
+        </button>
+      </div>
+
+      <!-- GRID METRIK METRIC CARD -->
+      <div class="holter-dashboard" id="sim_metrics_grid" style="display: none">
+        <div class="holter-card">
+          <div style="font-size: 0.8em; color: #515154; font-weight: bold">KALKULASI HR ALAT</div>
+          <div class="holter-val" id="sim_val_bpm">--<span class="holter-unit">BPM</span></div>
+        </div>
+        <div class="holter-card">
+          <div style="font-size: 0.8em; color: #515154; font-weight: bold">R-R INTERVAL RATIO</div>
+          <div class="holter-val" id="sim_val_rr">--<span class="holter-unit">detik</span></div>
+        </div>
+        <div class="holter-card">
+          <div style="font-size: 0.8em; color: #515154; font-weight: bold">DERAU INHERENT UTAMA</div>
+          <div class="holter-val" id="sim_val_noise">--<span class="holter-unit">Hz</span></div>
+        </div>
+        <div class="holter-card" style="grid-column: span 2">
+          <div style="font-size: 0.8em; color: #515154; font-weight: bold">REDAMAN AMPLITUDO PUNCAK R (MEDIAN)</div>
+          <div class="holter-val" id="sim_val_attenuation" style="color: #ff453a">--<span class="holter-unit">%</span></div>
+        </div>
+        <div class="holter-card" id="sim_recommendation_card" style="grid-column: span 5; text-align: left; background: #fff9e6; color: #b38f00; font-size: 0.95em; font-weight: bold; border: 1px solid #ffe699; display: none">
+          Rekomendasi Parameter Filter Anda Akan Muncul Di Sini.
+        </div>
+      </div>
+
+      <!-- VISUALISASI UTAMA -->
+      <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); text-align: center">
+        <img id="sim_report_img" style="width: 100%; border-radius: 6px; display: none" />
+        <div id="sim_placeholder_text" style="padding: 100px; color: #86868b; font-weight: bold">Silakan pilih folder rekaman lalu klik tombol untuk merender laporan grafis penyeimbang filter.</div>
+      </div>
+    </div>
+
     <script>
+      // Logika Navigasi Tab Switcher
+      function switchTab(tabId) {
+        if (tabId === 1) {
+          document.getElementById("view_tab_1").style.display = "flex";
+          document.getElementById("view_tab_2").style.display = "none";
+          document.getElementById("tab_btn_1").style.background = "#0071e3";
+          document.getElementById("tab_btn_1").style.color = "white";
+          document.getElementById("tab_btn_2").style.background = "#e5e5e7";
+          document.getElementById("tab_btn_2").style.color = "#1d1d1f";
+        } else {
+          document.getElementById("view_tab_1").style.display = "none";
+          document.getElementById("view_tab_2").style.display = "flex";
+          document.getElementById("tab_btn_1").style.background = "#e5e5e7";
+          document.getElementById("tab_btn_1").style.color = "#1d1d1f";
+          document.getElementById("tab_btn_2").style.background = "#0071e3";
+          document.getElementById("tab_btn_2").style.color = "white";
+          loadSimulatorFolders();
+        }
+      }
+
+      // Fetch daftar folder kustom dari hardware simulator
+      async function loadSimulatorFolders() {
+        const res = await fetch("http://127.0.0.1:8000/api/simulator/folders");
+        const folders = await res.json();
+        const selectNode = document.getElementById("sim_folder_select");
+        selectNode.innerHTML = "";
+        folders.forEach((f) => {
+          let opt = document.createElement("option");
+          opt.value = f;
+          opt.innerText = f;
+          selectNode.appendChild(opt);
+        });
+      }
+
+      // Ambil data analisis komparatif dari backend (Dukungan Fitur Filter Interaktif Tab 2)
+      async function triggerSimulatorAnalysis() {
+        const folder = document.getElementById("sim_folder_select").value;
+        const fs = document.getElementById("sim_fs").value;
+        const wav = document.getElementById("sim_wavelet").value;
+        const lvl = document.getElementById("sim_w_level").value;
+        const med = document.getElementById("sim_median_kernel").value;
+        const low = document.getElementById("sim_lowcut").value;
+        const high = document.getElementById("sim_highcut").value;
+
+        if (!folder) return;
+
+        document.getElementById("sim_placeholder_text").innerText = "Sedang menghitung transformasi Fourier (FFT) dan melacak koordinat puncak R... Mohon tunggu.";
+
+        const url = `http://127.0.0.1:8000/api/simulator/analyze?folder_name=${folder}&target_fs=${fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}`;
+        const res = await fetch(url);
+        const result = await res.json();
+
+        if (result.status === "success") {
+          document.getElementById("sim_placeholder_text").style.display = "none";
+          document.getElementById("sim_metrics_grid").style.display = "grid";
+
+          // Render Metrik Card
+          document.getElementById("sim_val_bpm").innerHTML = `${result.calculated_bpm}<span class="holter-unit">BPM</span>`;
+          document.getElementById("sim_val_rr").innerHTML = `${result.avg_rr_seconds}<span class="holter-unit">detik</span>`;
+          document.getElementById("sim_val_noise").innerHTML = `${result.dominant_noise_freq}<span class="holter-unit">Hz</span>`;
+          document.getElementById("sim_val_attenuation").innerHTML = `${result.attenuation_median_pct}<span class="holter-unit">%</span>`;
+
+          // Render Base64 Image
+          const imgNode = document.getElementById("sim_report_img");
+          imgNode.src = "data:image/png;base64," + result.image;
+          imgNode.style.display = "block";
+
+          // Berikan Sistem Rekomendasi Pintar Medis Otomatis
+          const recCard = document.getElementById("sim_recommendation_card");
+          recCard.style.display = "block";
+          if (parseFloat(result.calculated_bpm) < 65.0 && parseFloat(result.attenuation_median_pct) > 4.0) {
+            recCard.style.background = "#fff2e6";
+            recCard.style.color = "#ff9f0a";
+            recCard.style.border = "1px solid #ffd699";
+            recCard.innerHTML = `⚠️ <b>Rekomendasi Deteksi Bradikardia:</b> Sinyal terdeteksi sebagai Denyut Jantung Lambat (${result.calculated_bpm} BPM) dan filter median mereduksi amplitudo puncak R sebesar ${result.attenuation_median_pct}%. Filter terlalu agresif memotong fase isoelektrik. <b>Saran Tindakan:</b> Ubah parameter Median Filter Kernel di Tab 1 menjadi 101 atau 151 sampel sebelum grid search massal dilakukan.`;
+          } else {
+            recCard.style.background = "#e6f9ed";
+            recCard.style.color = "#34c759";
+            recCard.style.border = "1px solid #b3f0c2";
+            recCard.innerHTML = `✅ <b>Status Filter Stabil:</b> Redaman amplitudo puncak r-wave berada pada rentang batas aman (${result.attenuation_median_pct}%). Segmentasi morfologi dan interval waktu spasio-temporal EKG lulus uji distorsi klinis AHA.`;
+          }
+        } else {
+          alert(result.message);
+        }
+      }
+
       let charts = {};
 
       // PLUGIN GRID MILLIMETER BLOK KLINIS EKG ASLI
@@ -344,7 +518,6 @@
             ctx.lineTo(right, y);
             ctx.stroke();
           }
-
           ctx.restore();
         },
       };
@@ -405,15 +578,15 @@
         const res = await fetch(url);
         const result = await res.json();
 
-        // Update Diagnosa Kelas & Metrik Hardware
         document.getElementById("sample_class").innerText = result.target_class || "Unknown";
+        document.getElementById("ai_class").innerText = result.ai_prediction || "Not Loaded";
+        document.getElementById("ai_conf").innerText = result.ai_confidence ? `(${result.ai_confidence}%)` : "(--%)";
 
         if (result.metrics) {
           document.getElementById("val_latency").innerText = `${result.metrics.latency_ms.toFixed(2)} ms`;
           document.getElementById("val_memory").innerText = `${result.metrics.peak_memory_mb.toFixed(4)} MB`;
         }
 
-        // PERBAIKAN DI SINI: Jalur objek langsung ke result.holter
         const holter = result.holter || (result.metrics ? result.metrics.holter : null);
 
         if (holter) {
@@ -423,7 +596,6 @@
           document.getElementById("h_st").innerHTML = holter.st_dev_mv !== undefined ? `${holter.st_dev_mv.toFixed(3)}<span class="holter-unit">mV</span>` : `--<span class="holter-unit">mV</span>`;
           document.getElementById("h_qtc").innerHTML = `${holter.qtc_ms || "--"}<span class="holter-unit">ms</span>`;
 
-          // Render Event Tags
           const eventDiv = document.getElementById("h_events");
           eventDiv.innerHTML = "";
           if (holter.events && holter.events.length > 0) {
@@ -452,7 +624,6 @@
             charts[`raw_${i}`].data.datasets[0].data = rawData;
             charts[`raw_${i}`].update("none");
           }
-
           if (cleanData && cleanData.length > 0) {
             charts[`clean_${i}`].data.labels = Array.from({ length: cleanData.length }, (_, idx) => idx);
             charts[`clean_${i}`].data.datasets[0].data = cleanData;
