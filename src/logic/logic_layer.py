@@ -1,8 +1,17 @@
-# src/logic/logic_layer.py
+# =====================================================================
+# FILE: src/logic/logic_layer.py
+# PURPOSE: CORE LOGIC LAYER WITH SIGNAL DSP FUNCTIONS & HOLTER COMPUTATION
+# =====================================================================
+
 import numpy as np
 import time
 import tracemalloc
-import src.logic.preprocessing as dsp
+import math
+from fractions import Fraction
+import pywt
+from scipy import signal
+import tensorflow as tf
+from tensorflow.keras import layers
 
 def extract_holter_metrics(signal_1d, fs):
     try:
@@ -52,35 +61,30 @@ def extract_holter_metrics(signal_1d, fs):
             "st_dev_mv": round(st_dev_mv, 3), "qtc_ms": round(qtc, 1), "events": events
         }
     except Exception as e:
-        # Fallback aman jika kalkulasi matematika gagal agar grafik sinyal tetap muncul
         return {
-            "hr": "Err",
-            "rr_avg_ms": "Err",
-            "rmssd_ms": "Err",
-            "st_dev_mv": 0.0,
-            "qtc_ms": "Err",
+            "hr": "Err", "rr_avg_ms": "Err", "rmssd_ms": "Err", "st_dev_mv": 0.0, "qtc_ms": "Err",
             "events": [f"Metrik Terbatas: {str(e)}"]
-            }
+        }
 
 def execute_live_pipeline(raw_signal, src_fs, target_fs, p_wavelet, p_w_level, p_median_kernel, p_lowcut, p_highcut):
     tracemalloc.start()
     start_time = time.perf_counter()
     
-    x = dsp.sanitize_signal(raw_signal)
-    x = dsp.validate_signal_shape(x)
+    # Memanggil fungsi DSP internal yang didefinisikan di bawah
+    x = sanitize_signal(raw_signal)
+    x = validate_signal_shape(x)
     
-    x = dsp.apply_wavelet_denoising(x, wavelet=p_wavelet, level=int(p_w_level))
-    x = dsp.apply_median_baseline(x, kernel_size=int(p_median_kernel))
-    x = dsp.apply_butter_bandpass(x, fs=src_fs, lowcut=float(p_lowcut), highcut=float(p_highcut))
+    x = apply_wavelet_denoising(x, wavelet=p_wavelet, level=int(p_w_level))
+    x = apply_median_baseline(x, kernel_size=int(p_median_kernel))
+    x = apply_butter_bandpass(x, fs=src_fs, lowcut=float(p_lowcut), highcut=float(p_highcut))
     
     if src_fs != target_fs:
-        x = dsp.apply_poly_resample(x, src_fs, target_fs)
+        x = apply_poly_resample(x, src_fs, target_fs)
         
     end_time = time.perf_counter()
     current_mem, peak_mem = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     
-    # Hitung metrik Holter menggunakan Lead II (Indeks 1) hasil pembersihan
     holter_metrics = extract_holter_metrics(x[:, 1], target_fs)
     
     execution_metrics = {
@@ -90,3 +94,84 @@ def execute_live_pipeline(raw_signal, src_fs, target_fs, p_wavelet, p_w_level, p
     }
     
     return x, execution_metrics
+
+# =====================================================================
+# CORE IMPLEMENTATION PACKAGES FOR DSP PIPELINE
+# =====================================================================
+
+def sanitize_signal(raw_signal):
+    x = np.asarray(raw_signal, dtype=float)
+    if x.ndim == 1:
+        x = x[:, np.newaxis]
+    return np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+
+def validate_signal_shape(signal_array):
+    x = np.asarray(signal_array, dtype=float)
+    if x.ndim != 2:
+        raise ValueError("Signal must be a 2D array with shape [timesteps, channels].")
+    if x.shape[0] == 0 or x.shape[1] == 0:
+        raise ValueError("Signal cannot be empty.")
+    return x
+
+def apply_wavelet_denoising(signal_array, wavelet="db4", level=4):
+    x = validate_signal_shape(signal_array)
+    denoised = np.empty_like(x)
+    for channel_index in range(x.shape[1]):
+        channel = x[:, channel_index]
+        coeffs = pywt.wavedec(channel, wavelet=wavelet, level=level)
+        if len(coeffs) > 1:
+            detail = coeffs[-1]
+            sigma = np.median(np.abs(detail - np.median(detail))) / 0.6745 if detail.size else 0.0
+            threshold = sigma * math.sqrt(2.0 * math.log(max(channel.size, 2)))
+            coeffs = [coeffs[0]] + [pywt.threshold(c, threshold, mode="soft") for c in coeffs[1:]]
+        denoised[:, channel_index] = pywt.waverec(coeffs, wavelet=wavelet)[: channel.size]
+    return denoised
+
+def apply_median_baseline(signal_array, kernel_size=51):
+    x = validate_signal_shape(signal_array)
+    kernel_size = max(3, int(kernel_size))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+    corrected = np.empty_like(x)
+    for channel_index in range(x.shape[1]):
+        baseline = signal.medfilt(x[:, channel_index], kernel_size=kernel_size)
+        corrected[:, channel_index] = x[:, channel_index] - baseline
+    return corrected
+
+def apply_butter_bandpass(signal_array, fs, lowcut=0.5, highcut=45.0, order=4):
+    x = validate_signal_shape(signal_array)
+    nyquist = 0.5 * float(fs)
+    low = max(float(lowcut) / nyquist, 1e-6)
+    high = min(float(highcut) / nyquist, 0.999999)
+    if not low < high:
+        raise ValueError("lowcut must be lower than highcut and both must be within (0, Nyquist).")
+    sos = signal.butter(order, [low, high], btype="bandpass", output="sos")
+    return signal.sosfiltfilt(sos, x, axis=0)
+
+def apply_poly_resample(signal_array, src_fs, target_fs):
+    x = validate_signal_shape(signal_array)
+    src_fs = float(src_fs)
+    target_fs = float(target_fs)
+    if src_fs <= 0 or target_fs <= 0:
+        raise ValueError("Sampling rates must be positive.")
+    if np.isclose(src_fs, target_fs):
+        return x
+    ratio = Fraction(target_fs / src_fs).limit_denominator(1000)
+    return signal.resample_poly(x, ratio.numerator, ratio.denominator, axis=0)
+
+# =====================================================================
+# CUSTOM NN MODEL LAYERS
+# =====================================================================
+class StochasticDepth(layers.Layer):
+    def __init__(self, survival_probability=1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.survival_probability = survival_probability
+
+    def call(self, x, residual, training=None):
+        if training:
+            binary_tensor = tf.cast(
+                tf.random.uniform([]) < self.survival_probability,
+                tf.float32
+            )
+            x = (binary_tensor * x) / self.survival_probability
+        return x + residual
