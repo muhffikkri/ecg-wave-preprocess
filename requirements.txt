@@ -5,3 +5,4 @@ scipy
 PyWavelets
 wfdb
 pandas
+tensorflow
