@@ -22,7 +22,9 @@ DEFAULT_LEADS = [0, 1, 2]  # Lead I, II, dan III untuk visualisasi UI
 PIPELINE_VERSION = "v5.0_research_grade"
 
 # Model CNN
-MODEL_PATH = r"D:\Project\ecg-wave-preproccess\model\Pure CNN Multi Label\best_model.keras"
+ORIGINAL_MODEL_PATH = r"D:\Project\ecg-wave-preproccess\model\Pure CNN Multi Label\best_model.keras"
+PATCHED_MODEL_PATH = r"D:\Project\ecg-wave-preproccess\model\Pure CNN Multi Label\best_model_patched.keras"
+TFLITE_MODEL_PATH = r"D:\Project\ecg-wave-preproccess\model\Pure CNN Multi Label\best_model.tflite"
 
 # Kelas Target
 TARGET_CLASSES = ["Normal", "AF", "Takikardia", "Bradikardia"]
