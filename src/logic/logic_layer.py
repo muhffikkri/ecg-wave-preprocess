@@ -70,10 +70,24 @@ def execute_live_pipeline(raw_signal, src_fs, target_fs, p_wavelet, p_w_level, p
     tracemalloc.start()
     start_time = time.perf_counter()
     
-    # Memanggil fungsi DSP internal yang didefinisikan di bawah
     x = sanitize_signal(raw_signal)
     x = validate_signal_shape(x)
     
+    # =====================================================================
+    # ENGINE AUTO-KALIBRASI PINTAR (ADC CODE TO MV CONVERSION)
+    # =====================================================================
+    # Jika nilai rata-rata sinyal mentah melampaui angka rentang tegangan biologis (> 10 V atau > 10000 ADC)
+    # maka dipastikan ini adalah kode register mentah ADS1293 yang belum terkalibrasi
+    if np.abs(np.mean(x)) > 10000.0:
+        v_ref = 2.4        # Internal reference voltage ADS1293
+        hardware_gain = 3.5 # Default instrumentation gain register
+        mid_scale = 8388608.0 # 2^23 baseline offset untuk signed 24-bit register
+        
+        # Eksekusi transformasi linear matematika medis
+        x = ((x - mid_scale) / (mid_scale - 1.0)) * (v_ref / hardware_gain) * 1000.0
+    # =====================================================================
+
+    # Proses jalankan filter digital interaktif pasca-kalibrasi
     x = apply_wavelet_denoising(x, wavelet=p_wavelet, level=int(p_w_level))
     x = apply_median_baseline(x, kernel_size=int(p_median_kernel))
     x = apply_butter_bandpass(x, fs=src_fs, lowcut=float(p_lowcut), highcut=float(p_highcut))
@@ -85,6 +99,7 @@ def execute_live_pipeline(raw_signal, src_fs, target_fs, p_wavelet, p_w_level, p
     current_mem, peak_mem = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     
+    # Hitung metrik Holter menggunakan Lead II hasil kalibrasi & pembersihan esensial
     holter_metrics = extract_holter_metrics(x[:, 1], target_fs)
     
     execution_metrics = {
@@ -175,3 +190,11 @@ class StochasticDepth(layers.Layer):
             )
             x = (binary_tensor * x) / self.survival_probability
         return x + residual
+    
+# --- Wrapper BatchNormalization untuk mengabaikan argumen renorm ---
+class PatchedBatchNorm(layers.BatchNormalization):
+    def __init__(self, **kwargs):
+        kwargs.pop("renorm", None)
+        kwargs.pop("renorm_clipping", None)
+        kwargs.pop("renorm_momentum", None)
+        super().__init__(**kwargs)
