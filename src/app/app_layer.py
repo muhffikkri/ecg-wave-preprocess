@@ -1,23 +1,22 @@
 # =====================================================================
 # FILE: src/app/app_layer.py
-# PURPOSE: ECG LIVE WORKBENCH BACKEND WITH MULTI-LABEL INFERENCE & PROSIM
+# PURPOSE: ECG LIVE WORKBENCH WITH DUAL INFERENCE (KERAS VS TFLITE)
 # =====================================================================
 
 import os
 import sys
 import numpy as np
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 sys.path.append(os.getcwd())
 import src.config as cfg
 import src.data.data_layer as dl
 import src.logic.logic_layer as ll
 
-
-
-app = FastAPI(title="ECG Live Preprocessing & Multi-Label Inference Engine")
+app = FastAPI(title="ECG Live Engine: Keras vs TFLite Benchmarking")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,29 +26,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =====================================================================
-# SAFE MODEL LOADING BLOCK (KERAS 3 INCOMPATIBILITY PROTECTION)
-# =====================================================================
-# Menunjuk ke path model eksperimen utama Anda
-MODEL_PATH = os.path.join(os.getcwd(), "output", "research_experiments", "best_model.keras")
-ai_model = None
+root_project = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+presentation_dir = os.path.join(root_project, "src", "presentation")
 
-if os.path.exists(MODEL_PATH):
+# =====================================================================
+# SOLUSI UTAMA: Mount folder presentation agar asset .css dan .js terbaca
+# =====================================================================
+if os.path.exists(presentation_dir):
+    app.mount("/presentation", StaticFiles(directory=presentation_dir), name="presentation")
+
+# ---------------------------------------------------------------------
+# LOAD DUAL AI MODELS (KERAS & TFLITE)
+# ---------------------------------------------------------------------
+ai_model_keras = None
+tflite_interpreter = None
+
+# A. Load Patched Keras Model
+if os.path.exists(cfg.PATCHED_MODEL_PATH):
     try:
         import tensorflow as tf
-        # Menggunakan compile=False untuk mengabaikan fungsi loss/optimizer lama yang tidak kompatibel
-        ai_model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-        print(f"✅ [AI Model] Berhasil memuat model multi-label: {MODEL_PATH}")
+        ai_model_keras = tf.keras.models.load_model(cfg.PATCHED_MODEL_PATH, compile=False)
+        print(f"✅ [AI Keras] Berhasil memuat model steril.")
     except Exception as e:
-        print(f"⚠️ [AI Model Warning] Gagal memuat model karena ketidakcocokan versi BatchNormalization Keras.")
-        print(f"   Detail: {str(e)}")
-        print(f"   -> Server tetap menyala dalam Mode Preprocessing & Analisis Parameter DSP.")
-else:
-    print(f"⚠️ [AI Model] File model tidak ditemukan di {MODEL_PATH}. Mode AI Berjalan Standby.")
+        print(f"⚠️ [AI Keras Warning] Gagal memuat model Keras: {str(e)}")
 
-# =====================================================================
-# API ENDPOINTS
-# =====================================================================
+# B. Load TFLite Model Interpreter
+if os.path.exists(cfg.TFLITE_MODEL_PATH):
+    try:
+        import tensorflow as tf
+        tflite_interpreter = tf.lite.Interpreter(model_path=cfg.TFLITE_MODEL_PATH)
+        tflite_interpreter.allocate_tensors()
+        print(f"✅ [AI TFLite] Interpreter biner teralokasi sempurna.")
+    except Exception as e:
+        print(f"⚠️ [AI TFLite Warning] Gagal mengalokasikan berkas biner TFLite: {str(e)}")
+
+# ---------------------------------------------------------------------
+# HELPER DETECTOR FOR MULTI-LABEL DECISION
+# ---------------------------------------------------------------------
+def interpret_multilabel_probabilities(preds_prob):
+    detected_classes = []
+    for idx in range(len(cfg.TARGET_CLASSES)):
+        th = cfg.OPTIMIZED_THRESHOLDS[idx]
+        if preds_prob[idx] >= th:
+            detected_classes.append(f"{cfg.TARGET_CLASSES[idx]} ({round(float(preds_prob[idx])*100, 1)}%)")
+    
+    if not detected_classes:
+        return "Others / Ragu-ragu (Unsure)", float(np.max(preds_prob))
+    else:
+        return " + ".join(detected_classes), float(preds_prob[np.argmax(preds_prob)])
+
+# ---------------------------------------------------------------------
+# ROUTING CONTROLLER
+# ---------------------------------------------------------------------
 
 @app.get("/api/records")
 def list_records():
@@ -61,10 +89,8 @@ def process_signal(
     wavelet: str = "db4", w_level: int = 4, median_kernel: int = 51,
     lowcut: float = 0.5, highcut: float = 45.0
 ):
-    # 1. Muat data mentah & frekuensi sampling asal
     raw_signal, src_fs = dl.load_raw_signal(dataset, record_id)
          
-    # 2. Ambil kelas target asli dari manifest (Ground Truth Medis)
     try:
         if dataset == "chapman":
             import pandas as pd
@@ -72,7 +98,6 @@ def process_signal(
             sample_row = manifest[manifest['filename_npy'] == f"{record_id}.npy"]
             target_class = str(sample_row['target_class'].values[0]) if not sample_row.empty else "Unknown"
         elif dataset == "prosim_simulator":
-            # Berikan identitas yang informatif di UI
             target_class = f"ProSim Simulator ({record_id})"
         else:
             import wfdb
@@ -82,106 +107,79 @@ def process_signal(
     except Exception:
         target_class = "Aritmia Terdeteksi (Sampel)"
 
-    # 3. Jalankan DSP Preprocessing Pipeline secara Interaktif berdasarkan input UI
+    # Jalankan Auto-Calibration + Preprocessing
     clean_signal, metrics = ll.execute_live_pipeline(
         raw_signal, src_fs, target_fs, 
         wavelet, w_level, median_kernel, lowcut, highcut
     )
     
-    # 4. PARSING MULTI-LABEL REAL-TIME INFERENCE LOGIC (SIGMOID NEURONS)
-    ai_prediction_class = "Model Standby / Nonactive"
-    ai_confidence_score = 0.0
-    detected_classes = []
+    # Menyiapkan tensor input [Batch=1, Timesteps=2500, Channels=3] dengan tipe data float32
+    input_tensor = np.expand_dims(clean_signal[:2500, :], axis=0).astype(np.float32)
     
-    if ai_model is not None:
+    # 1. EVALUASI MODEL KERAS STANDAR
+    keras_pred = "Keras Offline"
+    keras_conf = 0.0
+    if ai_model_keras is not None:
         try:
-            # Slicing input tensor sepanjang 10 detik target model (2500 sampel) [Batch=1, Timesteps, Channels=3]
-            input_tensor = np.expand_dims(clean_signal[:2500, :], axis=0)
-            
-            # Mendapatkan keluaran probabilitas kontinu dari 4 neuron Sigmoid
-            preds_prob = ai_model.predict(input_tensor, verbose=0)[0]
-            
-            # Evaluasi per-neuron menggunakan ambang batas adaptif hasil eksperimen Anda
-            for idx in range(len(cfg.TARGET_CLASSES)):
-                th = cfg.OPTIMIZED_THRESHOLDS[idx]
-                if preds_prob[idx] >= th:
-                    detected_classes.append(f"{cfg.TARGET_CLASSES[idx]} ({round(float(preds_prob[idx])*100, 1)}%)")
-            
-            # Implementasi Open-Set Detection / Reject Option "Others"
-            if not detected_classes:
-                ai_prediction_class = "Others / Ragu-ragu (Unsure)"
-                # Ambil nilai probabilitas neuron tertinggi untuk representasi skor keyakinan
-                ai_confidence_score = float(np.max(preds_prob))
-            else:
-                # Gabungkan seluruh diagnosis jika terdeteksi komorbiditas sinyal ganda
-                ai_prediction_class = " + ".join(detected_classes)
-                best_class_idx = np.argmax(preds_prob)
-                ai_confidence_score = float(preds_prob[best_class_idx])
-                
+            preds_k = ai_model_keras.predict(input_tensor, verbose=0)[0]
+            keras_pred, keras_conf = interpret_multilabel_probabilities(preds_k)
         except Exception as e:
-            ai_prediction_class = f"Inference Error: {str(e)}"
+            keras_pred = f"Keras Error: {str(e)}"
+
+    # 2. EVALUASI MODEL TFLITE EDGE INTERPRETER
+    tflite_pred = "TFLite Offline"
+    tflite_conf = 0.0
+    if tflite_interpreter is not None:
+        try:
+            input_details = tflite_interpreter.get_input_details()
+            output_details = tflite_interpreter.get_output_details()
+            
+            # Pasang data ke dalam register memori TFLite
+            tflite_interpreter.set_tensor(input_details[0]['index'], input_tensor)
+            tflite_interpreter.invoke()
+            
+            # Tarik hasil prediksi probabilitas dari neuron keluaran
+            preds_tf = tflite_interpreter.get_tensor(output_details[0]['index'])[0]
+            tflite_pred, tflite_conf = interpret_multilabel_probabilities(preds_tf)
+        except Exception as e:
+            tflite_pred = f"TFLite Error: {str(e)}"
 
     return {
         "src_fs": src_fs,
         "target_fs": target_fs,
         "target_class": target_class,       
-        "ai_prediction": ai_prediction_class, 
-        "ai_confidence": round(ai_confidence_score * 100, 2), 
+        "keras_prediction": keras_pred, 
+        "keras_confidence": round(keras_conf * 100, 2),
+        "tflite_prediction": tflite_pred,
+        "tflite_confidence": round(tflite_conf * 100, 2),
         "metrics": metrics,
         "raw_signals": {f"lead_{i}": raw_signal[:, i].tolist() for i in range(3)},
         "clean_signals": {f"lead_{i}": clean_signal[:, i].tolist() for i in range(3)}
     }
 
+# @app.get("/")
+# def serve_workbench():
+#     html_path = os.path.join(presentation_dir, "index.html")
+#     return FileResponse(html_path)
+
 @app.get("/")
 def serve_workbench():
-    root_project = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    html_path = os.path.join(root_project, "src", "presentation", "index.html")
-    if not os.path.exists(html_path):
-        html_path = os.path.join(os.getcwd(), "src", "presentation", "index.html")
-    return FileResponse(html_path)
+    return RedirectResponse(url="/presentation/index.html")
 
-# =====================================================================
-# API EXTENSION FOR PROSIM SIMULATOR DYNAMIC ANALYSIS
-# =====================================================================
+# (Endpoint /api/simulator/folders dan analyze di bawah tetap sama seperti sebelumnya)
 from src.logic.dsp_simulation_workbench import run_dsp_distortion_analysis
-
 @app.get("/api/simulator/folders")
 def list_simulator_folders():
     try:
         calibrated_record_path = os.path.join(cfg.BASE_DIR, "Kalibrasi Prosim")
-        if not os.path.exists(calibrated_record_path):
-            return []
-            
-        all_dirs = [
-            d for d in os.listdir(calibrated_record_path) 
-            if os.path.isdir(os.path.join(calibrated_record_path, d)) and 
-            ("bpm" in d or "Arr" in d or "Sinus" in d or "Afib" in d or "Afb" in d or "Missed" in d or "PAC" in d)
-        ]
-        return sorted(all_dirs)
-    except Exception:
-        return []
+        if not os.path.exists(calibrated_record_path): return []
+        return sorted([d for d in os.listdir(calibrated_record_path) if os.path.isdir(os.path.join(calibrated_record_path, d))])
+    except Exception: return []
 
 @app.get("/api/simulator/analyze")
-def analyze_simulator_data(
-    folder_name: str, 
-    target_fs: float = 250.0,
-    wavelet: str = "db4", 
-    w_level: int = 4, 
-    median_kernel: int = 51, 
-    lowcut: float = 0.5, 
-    highcut: float = 45.0
-):
-    """Mengeksekusi analisis distorsi dengan parameter filter interaktif dari frontend"""
+def analyze_simulator_data(folder_name: str, target_fs: float = 250.0, wavelet: str = "db4", w_level: int = 4, median_kernel: int = 51, lowcut: float = 0.5, highcut: float = 45.0):
     full_path = os.path.join(cfg.BASE_DIR, "Kalibrasi Prosim", folder_name)
-    return run_dsp_distortion_analysis(
-        full_path, 
-        fs=target_fs,
-        p_wavelet=wavelet,
-        p_w_level=w_level,
-        p_median_kernel=median_kernel,
-        p_lowcut=lowcut,
-        p_highcut=highcut
-    )
+    return run_dsp_distortion_analysis(full_path, fs=target_fs, p_wavelet=wavelet, p_w_level=w_level, p_median_kernel=median_kernel, p_lowcut=lowcut, p_highcut=highcut)
 
 if __name__ == "__main__":
     import uvicorn
