@@ -1,86 +1,218 @@
 # =====================================================================
 # FILE: src/data/data_layer.py
-# PURPOSE: DATA ACCESS LAYER WITH PROSIM SIMULATOR INTEGRATION
+# PURPOSE: Data Access Layer
 # =====================================================================
 
 import os
+from functools import lru_cache
+
+import numpy as np
+import pandas as pd
 import scipy.io
 import wfdb
-import numpy as np
-from functools import lru_cache
-import src.config as cfg # Import konfigurasi global
-import pandas as pd
 
+from app import config as cfg
+
+
+# =====================================================================
+# RECORD DISCOVERY
+# =====================================================================
 @lru_cache(maxsize=1)
 def get_available_records():
-    """Memindai direktori secara dinamis berbasis path dari config.py"""
+    """
+    Scan seluruh dataset yang tersedia.
+
+    Returns
+    -------
+    dict
+        {
+            "chapman": [...],
+            "ptbxl_100hz": [...],
+            "ptbxl_500hz": [...],
+            "prosim_simulator": [...]
+        }
+    """
+
     records = {
         "chapman": [],
         "ptbxl_100hz": [],
         "ptbxl_500hz": [],
-        "prosim_simulator": []
+        "prosim_simulator": [],
     }
-    
-    # 1. Scan Chapman
-    if os.path.exists(cfg.CHAPMAN_DIR):
-        records["chapman"] = sorted(list(set([
-            os.path.splitext(f)[0] for f in os.listdir(cfg.CHAPMAN_DIR) if f.endswith('.mat')
-        ])))
-        
-    # 2. Scan PTB-XL 100Hz
-    if os.path.exists(cfg.PTBXL_100HZ_DIR):
-        records["ptbxl_100hz"] = sorted(list(set([
-            os.path.splitext(f)[0] for f in os.listdir(cfg.PTBXL_100HZ_DIR) if f.endswith('.hea')
-        ])))
-        
-    # 3. Scan PTB-XL 500Hz
-    if os.path.exists(cfg.PTBXL_500HZ_DIR):
-        records["ptbxl_500hz"] = sorted(list(set([
-            os.path.splitext(f)[0] for f in os.listdir(cfg.PTBXL_500HZ_DIR) if f.endswith('.hea')
-        ])))
 
-    # 4. Scan Folder Kalibrasi ProSim Berbasis BASE_DIR (Proteksi Typo & Eksklusi)
-    calibrated_record_path = os.path.join(cfg.BASE_DIR, "Kalibrasi Prosim")
-    if os.path.exists(calibrated_record_path):
-        records["prosim_simulator"] = sorted([
-            d for d in os.listdir(calibrated_record_path)
-            if os.path.isdir(os.path.join(calibrated_record_path, d)) and
-            ("bpm" in d or "Arr" in d or "Sinus" in d or "Afib" in d or "Afb" in d or "Missed" in d or "PAC" in d)
-        ])
-        
+    # -------------------------------------------------------------
+    # Chapman
+    # -------------------------------------------------------------
+    if os.path.isdir(cfg.CHAPMAN_DIR):
+        records["chapman"] = sorted(
+            {
+                os.path.splitext(f)[0]
+                for f in os.listdir(cfg.CHAPMAN_DIR)
+                if f.endswith(".mat")
+            }
+        )
+
+    # -------------------------------------------------------------
+    # PTBXL 100Hz
+    # -------------------------------------------------------------
+    if os.path.isdir(cfg.PTBXL_100HZ_DIR):
+        records["ptbxl_100hz"] = sorted(
+            {
+                os.path.splitext(f)[0]
+                for f in os.listdir(cfg.PTBXL_100HZ_DIR)
+                if f.endswith(".hea")
+            }
+        )
+
+    # -------------------------------------------------------------
+    # PTBXL 500Hz
+    # -------------------------------------------------------------
+    if os.path.isdir(cfg.PTBXL_500HZ_DIR):
+        records["ptbxl_500hz"] = sorted(
+            {
+                os.path.splitext(f)[0]
+                for f in os.listdir(cfg.PTBXL_500HZ_DIR)
+                if f.endswith(".hea")
+            }
+        )
+
+    # -------------------------------------------------------------
+    # ProSim Simulator
+    # -------------------------------------------------------------
+    prosim_root = cfg.PROSIM_SIMULATOR_DIR
+
+    if os.path.isdir(prosim_root):
+        keywords = (
+            "bpm",
+            "Arr",
+            "Sinus",
+            "Afib",
+            "Afb",
+            "Missed",
+            "PAC",
+        )
+
+        records["prosim_simulator"] = sorted(
+            d
+            for d in os.listdir(prosim_root)
+            if os.path.isdir(
+                os.path.join(prosim_root, d)
+            )
+            and any(k in d for k in keywords)
+        )
+
     return records
 
 
-def load_raw_signal(dataset_type, record_id):
-    """Memuat sinyal EKG mentah menggunakan konstanta dari config.py"""
+# =====================================================================
+# LOAD SIGNAL
+# =====================================================================
+def load_raw_signal(
+    dataset_type: str,
+    record_id: str,
+):
+    """
+    Memuat sinyal mentah sesuai dataset.
+
+    Returns
+    -------
+    signal : ndarray
+        Shape = (samples, channels)
+
+    fs : float
+        Sampling frequency
+    """
+
     if not record_id:
-        raise ValueError("Record ID tidak boleh kosong.")
-        
-    # Jalur Khusus A: Mengambil Data Rekaman Fisik Simulator ProSim
+        raise ValueError("record_id kosong.")
+
+    # =============================================================
+    # PROSIM
+    # =============================================================
     if dataset_type == "prosim_simulator":
-        path = os.path.join(cfg.BASE_DIR, "Kalibrasi Prosim", record_id, "data", "raw_ecg.csv")
-        df_sim = pd.read_csv(path)
-        
-        # Ekstrak kolom ch1, ch2, ch3 menjadi numpy array
-        data = df_sim[['ch1', 'ch2', 'ch3']].values
-        fs = 250.0  # Frekuensi sampling tetap alat ADS1293 Anda
-        return data, fs
-        
-    # Jalur B: Mengambil Dataset Publik Kategori Chapman
-    elif dataset_type == "chapman":
-        path = os.path.join(cfg.CHAPMAN_DIR, f"{record_id}.mat")
-        mat_data = scipy.io.loadmat(path)
-        data = mat_data['val'].T
+        csv_path = os.path.join(
+            cfg.PROSIM_SIMULATOR_DIR,
+            record_id,
+            "data",
+            "raw_ecg.csv",
+        )
+
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(csv_path)
+
+        df = pd.read_csv(csv_path)
+        required = ["ch1", "ch2", "ch3"]
+
+        for col in required:
+            if col not in df.columns:
+                raise ValueError(
+                    f"Kolom '{col}' tidak ditemukan."
+                )
+
+        signal = df[
+            required
+        ].to_numpy(dtype=np.float32)
+
+        fs = 250.0
+
+        return signal, fs
+
+    # =============================================================
+    # CHAPMAN
+    # =============================================================
+    if dataset_type == "chapman":
+        mat_path = os.path.join(
+            cfg.CHAPMAN_DIR,
+            f"{record_id}.mat",
+        )
+
+        if not os.path.exists(mat_path):
+            raise FileNotFoundError(mat_path)
+
+        mat = scipy.io.loadmat(mat_path)
+
+        if "val" not in mat:
+            raise ValueError(
+                "'val' tidak ditemukan pada MAT file."
+            )
+
+        signal = mat["val"].T.astype(np.float32)
         fs = 500.0
-        
-    # Jalur C: Mengambil Dataset Publik Kategori PTB-XL (100Hz / 500Hz)
+        signal = signal[:, cfg.DEFAULT_LEADS]
+        return signal, fs
+
+    # =============================================================
+    # PTB-XL
+    # =============================================================
+    if dataset_type == "ptbxl_100hz":
+        folder = cfg.PTBXL_100HZ_DIR
+
+    elif dataset_type == "ptbxl_500hz":
+        folder = cfg.PTBXL_500HZ_DIR
+
     else:
-        sub_folder = cfg.PTBXL_100HZ_DIR if dataset_type == "ptbxl_100hz" else cfg.PTBXL_500HZ_DIR
-        path = os.path.join(sub_folder, record_id)
-        
-        record, meta = wfdb.rdsamp(path)
-        data = record
-        fs = float(meta['fs'])
-        
-    # Slicing otomatis menggunakan settingan DEFAULT_LEADS untuk data Chapman & PTB-XL
-    return data[:, cfg.DEFAULT_LEADS], fs
+        raise ValueError(
+            f"Dataset '{dataset_type}' tidak dikenali."
+        )
+
+    record_path = os.path.join(
+        folder,
+        record_id,
+    )
+
+    signal, metadata = wfdb.rdsamp(
+        record_path,
+    )
+
+    fs = float(
+        metadata["fs"]
+    )
+
+    signal = signal.astype(np.float32)
+
+    signal = signal[
+        :,
+        cfg.DEFAULT_LEADS,
+    ]
+
+    return signal, fs
