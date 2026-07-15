@@ -2,40 +2,56 @@
 # FILE: src/logic/patch_model.py
 # PURPOSE: DUAL PRODUCTION CONVERTER (PATCHED .KERAS & NATIVE .TFLITE)
 # =====================================================================
-import os
 import zipfile
 import json
 import shutil
 import tensorflow as tf
+from tensorflow.keras import layers
+
+import src.app.config as cfg
 
 # Ambil kelas StochasticDepth asli bawaan arsitektur Anda
-from src.logic.logic_layer import StochasticDepth
+# from logic.ai_model_manager import StochasticDepth
+class StochasticDepth(layers.Layer):
+    def __init__(self, survival_probability=1.0, **kwargs):
+        super().__init__(**kwargs)
+        self.survival_probability = survival_probability
+
+    def call(self, x, residual, training=None):
+        if training:
+            binary_tensor = tf.cast(
+                tf.random.uniform([]) < self.survival_probability,
+                tf.float32,
+            )
+            x = (binary_tensor * x) / self.survival_probability
+
+        return x + residual
 
 # --- Jalur Berkas ---
-original_model_path = r"D:\Project\ecg-wave-preproccess\model\Pure CNN Multi Label\best_model.keras"
-patched_model_path = r"D:\Project\ecg-wave-preproccess\model\Pure CNN Multi Label\best_model_patched.keras"
-tflite_model_path = r"D:\Project\ecg-wave-preproccess\model\Pure CNN Multi Label\best_model.tflite"
-tmp_dir = r"D:\Project\ecg-wave-preproccess\model\Pure CNN Multi Label\tmp_extracted"
+original_model_path = cfg.ORIGINAL_MODEL_PATH
+patched_model_path = cfg.PATCHED_MODEL_PATH
+tflite_model_path = cfg.TFLITE_MODEL_PATH
+tmp_dir = cfg.MODEL_TMP_EXTRACT_DIR
 
-if not os.path.exists(original_model_path):
+if not original_model_path.exists():
     print(f"❌ File model tidak ditemukan di {original_model_path}")
-    exit()
+    raise SystemExit(1)
 
 # =====================================================================
 # FASE 1: STRIP PARAMETER RENORM DENGAN AMAN VIA ZIP MANIFEST PARSING
 # =====================================================================
 print("⏳ 1. Membongkar kontainer arsip berkas .keras...")
-if os.path.exists(tmp_dir):
+if tmp_dir.exists():
     shutil.rmtree(tmp_dir)
     
 with zipfile.ZipFile(original_model_path, 'r') as zip_ref:
     zip_ref.extractall(tmp_dir)
 
-config_json_path = os.path.join(tmp_dir, "config.json")
-if not os.path.exists(config_json_path):
+config_json_path = tmp_dir / "config.json"
+if not config_json_path.exists():
     print("❌ Format berkas .keras tidak valid (config.json absen).")
     shutil.rmtree(tmp_dir)
-    exit()
+    raise SystemExit(1)
 
 print("🧹 2. Membersihkan parameter renorm usang dari berkas arsitektur JSON...")
 with open(config_json_path, 'r') as f:
@@ -64,10 +80,9 @@ with open(config_json_path, 'w') as f:
 
 print("💾 3. Mengemas kembali menjadi model .keras produksi terkalibrasi...")
 with zipfile.ZipFile(patched_model_path, 'w', zipfile.ZIP_DEFLATED) as zip_out:
-    for root, _, files in os.walk(tmp_dir):
-        for file in files:
-            full_path = os.path.join(root, file)
-            rel_path = os.path.relpath(full_path, tmp_dir)
+    for full_path in tmp_dir.rglob("*"):
+        if full_path.is_file():
+            rel_path = full_path.relative_to(tmp_dir)
             zip_out.write(full_path, rel_path)
 
 shutil.rmtree(tmp_dir)
@@ -86,7 +101,7 @@ try:
     print("   -> Validasi Keras Produksi Native Load: SUKSES!")
 except Exception as e:
     print(f"   -> Validasi Keras Load Gagal: {str(e)}")
-    exit()
+    raise SystemExit(1)
 
 print("📦 5. Mengonversi arsitektur terkalibrasi ke format TFLite Edge...")
 converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
