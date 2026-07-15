@@ -2,21 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <title>ECG Live Clinical Workbench</title>
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css">
+
+    <!-- Path disesuaikan untuk FastAPI Mounting Static -->
+    <link rel="stylesheet" href="/static/style.css" />
   </head>
+
   <body>
-    <body>
-    <!-- TAB SWITCHER NAV BAR -->
+    <!-- ========================================================= -->
+    <!-- TAB SWITCHER -->
+    <!-- ========================================================= -->
     <div style="display: flex; gap: 10px; margin-bottom: 15px">
       <button id="tab_btn_1" onclick="switchTab(1)" style="padding: 10px 20px; background: #0071e3; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer">1. Live Dataset Workbench</button>
+
       <button id="tab_btn_2" onclick="switchTab(2)" style="padding: 10px 20px; background: #e5e5e7; color: #1d1d1f; border: none; border-radius: 6px; font-weight: bold; cursor: pointer">2. ProSim Hardware DSP Study</button>
     </div>
 
-    <!-- VIEW 1: DATASET BENCHMARK -->
+    <!-- ========================================================= -->
+    <!-- TAB 1 : LIVE DATASET WORKBENCH -->
+    <!-- ========================================================= -->
     <div id="view_tab_1" class="main-container">
-      <!-- HEADER PANEL BERSIH (TANPA BADGE MENUMPUK) -->
+      <!-- HEADER -->
       <div class="header-panel">
         <div>
           <div style="font-size: 1.4em; font-weight: bold; color: #1d1d1f">Wearable ECG Edge Computing Workbench</div>
@@ -24,190 +34,246 @@
         </div>
       </div>
 
+      <!-- ECG CANVAS GRAPH -->
       <div class="grid-canvas">
         <div class="column-title">RAW SIGNAL (AUTO CALIBRATED ON-THE-FLY)</div>
         <div class="column-title">CLEANED RESAMPLED SIGNAL</div>
 
-        <div class="lead-label">CHANNEL 1: LEAD I</div>
+        <!-- LEAD I -->
+        <div class="lead-label">CHANNEL 1 : LEAD I</div>
         <div class="chart-container"><canvas id="raw_lead_0"></canvas></div>
         <div class="chart-container"><canvas id="clean_lead_0"></canvas></div>
 
-        <div class="lead-label">CHANNEL 2: LEAD II</div>
+        <!-- LEAD II -->
+        <div class="lead-label">CHANNEL 2 : LEAD II</div>
         <div class="chart-container"><canvas id="raw_lead_1"></canvas></div>
         <div class="chart-container"><canvas id="clean_lead_1"></canvas></div>
 
-        <div class="lead-label">CHANNEL 3: LEAD III</div>
+        <!-- LEAD III -->
+        <div class="lead-label">CHANNEL 3 : LEAD III</div>
         <div class="chart-container"><canvas id="raw_lead_2"></canvas></div>
         <div class="chart-container"><canvas id="clean_lead_2"></canvas></div>
       </div>
 
-      <!-- PANEL DASHBOARD HOLTER KLINIS + BADGE DIAGNOSIS DI BAWAH GRAFIK -->
+      <!-- HOLTER METRICS DASHBOARD -->
       <div class="holter-dashboard">
-        <!-- BARIS BARU: INFORMASI DIAGNOSIS MEDIS & AI MODEL -->
-        <div class="holter-card" style="grid-column: span 5; text-align: left; background: #ffffff; padding: 12px 20px; display: flex; align-items: center; gap: 15px; border-bottom: 2px solid #f5f5f7;">
-          <div style="font-weight: bold; color: #515154; font-size: 0.9em;">DIAGNOSIS REKAMAN:</div>
-          <div>Asli (GT): <span id="sample_class" class="class-badge" style="background: #0071e3; font-size: 0.95em; padding: 4px 12px;">Loading...</span></div>
-          <div style="margin-left: 10px;">Prediksi AI Multi-Label: <span id="ai_class" class="class-badge" style="background: #34c759; font-size: 0.95em; padding: 4px 12px;">Waiting...</span> <span id="ai_conf" style="font-family: monospace; font-weight: bold; font-size: 0.9em; color: #86868b; margin-left: 3px">(--%)</span></div>
+        <!-- ROW 1: 5 METRIC CARDS (AUTOMATIC 1/5 WIDTH EACH) -->
+        <div class="holter-card">
+          <div class="metric-title">HEART RATE</div>
+          <div class="holter-val" id="h_hr">--<span class="holter-unit"> BPM</span></div>
         </div>
 
         <div class="holter-card">
-          <div style="font-size: 0.85em; font-weight: bold; color: #515154">HEART RATE (HR)</div>
-          <div class="holter-val" id="h_hr">--<span class="holter-unit">BPM</span></div>
+          <div class="metric-title">MEAN RR</div>
+          <div class="holter-val" id="h_rr">--<span class="holter-unit"> ms</span></div>
         </div>
+
         <div class="holter-card">
-          <div style="font-size: 0.85em; font-weight: bold; color: #515154">MEAN R-R INTERVAL</div>
-          <div class="holter-val" id="h_rr">--<span class="holter-unit">ms</span></div>
+          <div class="metric-title">HRV (RMSSD)</div>
+          <div class="holter-val" id="h_hrv">--<span class="holter-unit"> ms</span></div>
         </div>
+
         <div class="holter-card">
-          <div style="font-size: 0.85em; font-weight: bold; color: #515154">HRV (RMSSD)</div>
-          <div class="holter-val" id="h_hrv">--<span class="holter-unit">ms</span></div>
+          <div class="metric-title">ST DEV</div>
+          <div class="holter-val" id="h_st">--<span class="holter-unit"> mV</span></div>
         </div>
+
         <div class="holter-card">
-          <div style="font-size: 0.85em; font-weight: bold; color: #515154">ST SEGMENT DEV.</div>
-          <div class="holter-val" id="h_st">--<span class="holter-unit">mV</span></div>
+          <div class="metric-title">QTc</div>
+          <div class="holter-val" id="h_qtc">--<span class="holter-unit"> ms</span></div>
         </div>
-        <div class="holter-card">
-          <div style="font-size: 0.85em; font-weight: bold; color: #515154">CORRECTED QT (QTc)</div>
-          <div class="holter-val" id="h_qtc">--<span class="holter-unit">ms</span></div>
+
+        <!-- ROW 2: DETECTED CLINICAL EVENTS & COMPARATIVE AI INFERENCE (FULL WIDE TO PREVENT OVERFLOW) -->
+
+        <!-- Clinical Events Card -->
+        <div class="holter-card holter-wide">
+          <div class="metric-title">Detected Clinical Events</div>
+          <div id="h_events" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px">--</div>
         </div>
-        <div class="holter-card" style="grid-column: span 5; text-align: left; background: #ffffff; padding: 15px 20px; display: flex; flex-direction: column; gap: 10px; border-bottom: 2px solid #f5f5f7;">
-          <div style="font-weight: bold; color: #1d1d1f; font-size: 1em; border-left: 4px solid #0071e3; padding-left: 8px;">📊 INTERPRETASI KLINIS & COMPARATIVE AI INFERENCE</div>
-          <div style="display: flex; gap: 30px; flex-wrap: wrap; margin-top: 5px;">
-            <div><b>1. Ground Truth (Klinis Asli):</b> <span id="sample_class" class="class-badge" style="background: #0071e3; font-size: 0.9em; padding: 4px 12px;">Loading...</span></div>
-            <div><b>2. Keras Model (.keras):</b> <span id="keras_class" class="class-badge" style="background: #34c759; font-size: 0.9em; padding: 4px 12px;">Waiting...</span> <span id="keras_conf" style="font-family: monospace; font-weight: bold; font-size: 0.85em; color: #86868b;">(--%)</span></div>
-            <div><b>3. TFLite Edge (.tflite):</b> <span id="tflite_class" class="class-badge" style="background: #5856d6; font-size: 0.9em; padding: 4px 12px;">Waiting...</span> <span id="tflite_conf" style="font-family: monospace; font-weight: bold; font-size: 0.85em; color: #86868b;">(--%)</span></div>
+
+        <!-- Comparative AI Inference (Dibuat terpisah per baris/blok vertikal agar nama folder panjang aman) -->
+        <div class="holter-card holter-wide">
+          <h3 style="margin-bottom: 15px; text-align: left; font-size: 1.1rem; color: #1d1d1f">Comparative AI Inference</h3>
+
+          <div class="comparison-vertical-flex">
+            <div class="inference-row-item">
+              <span class="inference-label">Ground Truth (Asli GT) / Detail:</span>
+              <div class="inference-value-block">
+                <!-- Elemen id="sample_class" & id="sample_class_detail" digabung karena fungsinya sama -->
+                <span id="sample_class" class="class-badge" style="background: #0071e3">Loading...</span>
+                <!-- Elemen id ini disembunyikan / dipertahankan agar script.js tidak error saat mencari DOM -->
+                <span id="sample_class_detail" style="display: none"></span>
+              </div>
+            </div>
+
+            <div class="inference-row-item">
+              <span class="inference-label">Keras Model Prediction:</span>
+              <div class="inference-value-block">
+                <span id="keras_class" class="class-badge success">Waiting...</span>
+                <span id="keras_conf" class="conf-text">(--%)</span>
+              </div>
+            </div>
+
+            <div class="inference-row-item">
+              <span class="inference-label">TFLite Edge Model Prediction:</span>
+              <div class="inference-value-block">
+                <span id="tflite_class" class="class-badge purple">Waiting...</span>
+                <span id="tflite_conf" class="conf-text">(--%)</span>
+              </div>
+            </div>
+
+            <!-- Elemen ini dipertahankan secara tersembunyi agar logika 'ai_class' di script.js Anda tidak patah/crash -->
+            <span id="ai_class" style="display: none"></span>
+            <span id="ai_conf" style="display: none"></span>
           </div>
         </div>
       </div>
 
+      <!-- CONFIG PANEL -->
       <div class="config-container">
         <div class="control-group">
-          <label>Dataset Source</label>
+          <label>Dataset</label>
           <select id="dataset" onchange="loadRecordOptions()">
-            <option value="prosim_simulator">ProSim Simulator (250Hz)</option>
-            <option value="ptbxl_100hz">PTB-XL Database (100Hz)</option>
-            <option value="ptbxl_500hz">PTB-XL Database (500Hz)</option>
-            <option value="chapman">Chapman Dataset (500Hz)</option>
+            <option value="prosim_simulator">ProSim Simulator</option>
+            <option value="ptbxl_100hz">PTB-XL (100Hz)</option>
+            <option value="ptbxl_500hz">PTB-XL (500Hz)</option>
+            <option value="chapman">Chapman</option>
           </select>
         </div>
+
         <div class="control-group">
-          <label>Active Record ID</label>
-          <select id="record_id"></select>
+          <label>Record ID</label>
+          <select id="record_id" onchange="triggerProcessing()"></select>
         </div>
+
         <div class="control-group">
-          <label>Target Resampling (Hz)</label>
-          <input type="number" id="target_fs" value="250" />
+          <label>Target Sampling</label>
+          <input id="target_fs" type="number" value="250" />
         </div>
+
         <div class="control-group">
-          <label>Adaptive Wavelet Type</label>
+          <label>Wavelet</label>
           <select id="wavelet">
-            <option value="db4">Daubechies (db4)</option>
-            <option value="sym4">Symlets (sym4)</option>
+            <option value="db4">db4</option>
+            <option value="sym4">sym4</option>
           </select>
         </div>
+
         <div class="control-group">
-          <label>Wavelet Decomposition Level <span id="lbl_w_level" class="slider-val">4</span></label>
-          <input type="range" id="w_level" min="1" max="6" value="4" oninput="document.getElementById('lbl_w_level').innerText = this.value" />
-        </div>
-        <div class="control-group">
-          <label>Median Filter Kernel (Baseline)</label>
-          <input type="number" id="median_kernel" value="51" step="2" />
-        </div>
-        <div class="control-group">
-          <label>Butterworth Lowcut (Hz)</label>
-          <input type="number" id="lowcut" value="0.5" step="0.1" />
-        </div>
-        <div class="control-group">
-          <label>Butterworth Highcut (Hz)</label>
-          <input type="number" id="highcut" value="45.0" step="1" />
+          <!-- Perbaikan 8: Penambahan class slider-val -->
+          <label>Wavelet Level <span id="lbl_w_level" class="slider-val">4</span></label>
+          <input id="w_level" type="range" min="1" max="6" value="4" oninput="document.getElementById('lbl_w_level').innerText = this.value" />
         </div>
 
-        <div class="hardware-metrics" id="hardware_metrics">
-          <div class="metric-item">⚡ PI EDGE LATENCY: <span id="val_latency">-- ms</span></div>
-          <div class="metric-item">📟 PEAK MEMORY ALLOCATION: <span id="val_memory">-- MB</span></div>
+        <div class="control-group">
+          <label>Median Kernel</label>
+          <input id="median_kernel" type="number" value="51" />
         </div>
 
-        <button class="btn-update" onclick="triggerProcessing()">UPDATE LIVE PREPROCESSING PIPELINE</button>
+        <div class="control-group">
+          <label>Low Cut (Hz)</label>
+          <input id="lowcut" type="number" step="0.1" value="0.5" />
+        </div>
+
+        <div class="control-group">
+          <label>High Cut (Hz)</label>
+          <input id="highcut" type="number" step="1" value="45" />
+        </div>
+
+        <!-- Perbaikan 9: Perubahan inner <span> Hardware Metric -->
+        <div class="hardware-metrics">
+          <div class="metric-item">Latency : <span id="val_latency">-- ms</span></div>
+          <div class="metric-item">Peak Memory : <span id="val_memory">-- MB</span></div>
+        </div>
+
+        <button class="btn-update" onclick="triggerProcessing()">UPDATE PIPELINE</button>
       </div>
     </div>
 
-    <!-- VIEW 2: STUDI DISTORSI HARDWARE -->
+    <!-- ========================================================= -->
+    <!-- TAB 2 : PROSIM HARDWARE DSP STUDY -->
+    <!-- ========================================================= -->
     <div id="view_tab_2" class="main-container" style="display: none">
       <div class="header-panel">
         <div>
-          <div style="font-size: 1.4em; font-weight: bold; color: #1d1d1f">🎛️ ADS1293 Hardware Distortion & DSP Parameter Optimization</div>
-          <div style="color: #86868b; font-size: 0.85em; margin-top: 4px">Kepatuhan Rekayasa Biomedis: Analisis Fase Isolasional Atentutasi Segmen ST</div>
+          <div style="font-size: 1.4em; font-weight: bold; color: #1d1d1f">ADS1293 Hardware Distortion & DSP Parameter Optimization</div>
+          <div style="color: #86868b; font-size: 0.85em; margin-top: 4px">Interactive Biomedical DSP Validation</div>
         </div>
       </div>
 
-      <!-- KONTROL BARU: PANEL PREPROCESSING INTERAKTIF TAB 2 -->
-      <div class="config-container" style="margin-top: 0px; padding: 20px">
+      <div class="config-container">
         <div class="control-group" style="grid-column: span 2">
-          <label>Pilih Folder Rekaman Sensor Simulator ProSim:</label>
-          <select id="sim_folder_select" style="width: 100%"></select>
+          <label>Simulator Folder</label>
+          <select id="sim_folder_select"></select>
         </div>
+
         <div class="control-group">
-          <label>Frekuensi Sampling Alat (Hz):</label>
-          <input type="number" id="sim_fs" value="250" style="width: 100%" />
+          <label>Sampling Frequency (Hz)</label>
+          <input id="sim_fs" type="number" value="250" />
         </div>
+
         <div class="control-group">
-          <label>Adaptive Wavelet Type</label>
+          <label>Wavelet</label>
           <select id="sim_wavelet">
-            <option value="db4">Daubechies (db4)</option>
-            <option value="sym4">Symlets (sym4)</option>
+            <option value="db4">db4</option>
+            <option value="sym4">sym4</option>
           </select>
         </div>
+
         <div class="control-group">
-          <label>Wavelet Decomposition Level <span id="lbl_sim_w_level" class="slider-val">4</span></label>
-          <input type="range" id="sim_w_level" min="1" max="6" value="4" oninput="document.getElementById('lbl_sim_w_level').innerText = this.value" />
+          <label>Wavelet Level <span id="lbl_sim_w_level" class="slider-val">4</span></label>
+          <input id="sim_w_level" type="range" min="1" max="6" value="4" oninput="document.getElementById('lbl_sim_w_level').innerText = this.value" />
         </div>
+
         <div class="control-group">
-          <label>Median Filter Kernel</label>
-          <input type="number" id="sim_median_kernel" value="51" step="2" />
+          <label>Median Kernel</label>
+          <input id="sim_median_kernel" type="number" value="51" step="2" />
         </div>
+
         <div class="control-group">
-          <label>Butterworth Lowcut (Hz)</label>
-          <input type="number" id="sim_lowcut" value="0.5" step="0.1" />
+          <label>Low Cut (Hz)</label>
+          <input id="sim_lowcut" type="number" value="0.5" step="0.1" />
         </div>
+
         <div class="control-group">
-          <label>Butterworth Highcut (Hz)</label>
-          <input type="number" id="sim_highcut" value="45.0" step="1" />
+          <label>High Cut (Hz)</label>
+          <input id="sim_highcut" type="number" value="45" step="1" />
         </div>
-        <button onclick="triggerSimulatorAnalysis()" style="grid-column: span 4; padding: 12px; background: #34c759; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 1.1em; cursor: pointer">
-          🚀 RUN INTERACTIVE DISTORSI ANALYSIS REPORT
-        </button>
+
+        <button class="btn-update" style="background: #34c759" onclick="triggerSimulatorAnalysis()">RUN DSP ANALYSIS</button>
       </div>
 
-      <!-- GRID METRIK METRIC CARD -->
-      <div class="holter-dashboard" id="sim_metrics_grid" style="display: none">
+      <!-- Perbaikan 2: Mengembalikan sim_metrics_grid & sim_recommendation_card -->
+      <div id="sim_metrics_grid" class="holter-dashboard" style="margin-top: 20px; display: grid">
         <div class="holter-card">
-          <div style="font-size: 0.8em; color: #515154; font-weight: bold">KALKULASI HR ALAT</div>
-          <div class="holter-val" id="sim_val_bpm">--<span class="holter-unit">BPM</span></div>
-        </div>
-        <div class="holter-card">
-          <div style="font-size: 0.8em; color: #515154; font-weight: bold">R-R INTERVAL RATIO</div>
-          <div class="holter-val" id="sim_val_rr">--<span class="holter-unit">detik</span></div>
+          <div class="metric-title">SIMULATED BPM</div>
+          <div class="holter-val" id="sim_val_bpm">--<span class="holter-unit"> BPM</span></div>
         </div>
         <div class="holter-card">
-          <div style="font-size: 0.8em; color: #515154; font-weight: bold">DERAU INHERENT UTAMA</div>
-          <div class="holter-val" id="sim_val_noise">--<span class="holter-unit">Hz</span></div>
+          <div class="metric-title">SIMULATED RR</div>
+          <div class="holter-val" id="sim_val_rr">--<span class="holter-unit"> ms</span></div>
         </div>
-        <div class="holter-card" style="grid-column: span 2">
-          <div style="font-size: 0.8em; color: #515154; font-weight: bold">REDAMAN AMPLITUDO PUNCAK R (MEDIAN)</div>
-          <div class="holter-val" id="sim_val_attenuation" style="color: #ff453a">--<span class="holter-unit">%</span></div>
+        <div class="holter-card">
+          <div class="metric-title">ESTIMATED NOISE</div>
+          <div class="holter-val" id="sim_val_noise">--<span class="holter-unit"> uV</span></div>
         </div>
-        <div class="holter-card" id="sim_recommendation_card" style="grid-column: span 5; text-align: left; background: #fff9e6; color: #b38f00; font-size: 0.95em; font-weight: bold; border: 1px solid #ffe699; display: none">
-          Rekomendasi Parameter Filter Anda Akan Muncul Di Sini.
+        <div class="holter-card">
+          <div class="metric-title">ATTENUATION RATE</div>
+          <div class="holter-val" id="sim_val_attenuation">--<span class="holter-unit"> dB</span></div>
+        </div>
+        <div id="sim_recommendation_card" class="holter-card holter-wide" style="text-align: left; background: #fffdf0; border-left: 5px solid #ffcc00; padding: 15px">
+          <div class="metric-title" style="color: #b78103; font-weight: bold">DSP FILTER RECOMMENDATION</div>
+          <div id="sim_recommendation_text" style="margin-top: 5px; font-size: 0.95rem; color: #1d1d1f">Menunggu analisis parameter...</div>
         </div>
       </div>
 
-      <!-- VISUALISASI UTAMA -->
-      <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); text-align: center">
-        <img id="sim_report_img" style="width: 100%; border-radius: 6px; display: none" />
-        <div id="sim_placeholder_text" style="padding: 100px; color: #86868b; font-weight: bold">Silakan pilih folder rekaman lalu klik tombol untuk merender laporan grafis penyeimbang filter.</div>
+      <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); text-align: center; margin-top: 20px">
+        <img id="sim_report_img" style="width: 100%; display: none; border-radius: 8px" />
+        <div id="sim_placeholder_text" style="padding: 100px; color: #86868b; font-weight: bold">Silakan pilih folder rekaman kemudian jalankan analisis.</div>
       </div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- JavaScript Path Terintegrasi FastAPI -->
+    <script src="/static/script.js"></script>
   </body>
 </html>
