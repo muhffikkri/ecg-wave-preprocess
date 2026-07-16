@@ -110,7 +110,8 @@ BASE_DIR = r"D:\Project\ecg-wave-preproccess\dataset"
 Eksekusi server ASGI lokal menggunakan modul Python dari _root project_ direktori dengan perintah:
 
 ```bash
-python -m src.app.app_layer
+# python -m src.app.app_layer
+uvicorn app.main:app --reload
 ```
 
 Jika berhasil, terminal akan menampilkan log pesan uvicorn sukses berjalan:
