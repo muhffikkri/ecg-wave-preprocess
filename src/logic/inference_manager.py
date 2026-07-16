@@ -97,6 +97,7 @@ def prepare_model_input(signal):
 
     # 4. Ekspansi dimensi tensor menjadi bentuk batch (1, 2500, 3)
     x = np.expand_dims(x, axis=0)
+    # print(x.shape)
     return x.astype(np.float32)
 
 
@@ -113,6 +114,11 @@ def run_dual_model_inference(clean_signal):
 
     # x sekarang dijamin berupa matriks ternormalisasi berdimensi kaku (1, 2500, 3)
     x = prepare_model_input(clean_signal)
+    print(x.shape)
+    print(x.mean())
+    print(x.std())
+    print(x.min())
+    print(x.max())
 
     # ==============================================================
     # KERAS INFERENCE

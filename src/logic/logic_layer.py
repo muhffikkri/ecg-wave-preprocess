@@ -14,143 +14,6 @@ from scipy import signal
 
 
 # =====================================================================
-# 1. CORE TRAINING COMPATIBLE DSP UTILITIES (Research-Grade v5.0)
-# =====================================================================
-
-def sanitize_signal(raw_signal):
-    """Membersihkan NaN / Inf sebelum proses DSP."""
-    x = np.asarray(raw_signal, dtype=np.float32)
-    if x.ndim == 1:
-        x = x[:, None]
-    return np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
-
-
-def validate_signal_shape(signal_array):
-    """Memastikan format tensor: [timesteps, channels]"""
-    x = np.asarray(signal_array)
-    if x.ndim != 2:
-        raise ValueError(f"Signal harus 2D [T,C], didapat shape={x.shape}")
-    if x.shape[0] < 32:
-        raise ValueError("Signal terlalu pendek untuk diproses.")
-    return x
-
-
-def ensure_length(signal_array, target_len=2500):
-    """
-    Mengondisikan panjang biosinyal (Center Crop / Zero Padding).
-    Dipanggil KHUSUS di inference_manager sebelum pembentukan tensor AI.
-    """
-    x = sanitize_signal(signal_array)
-    current_len = x.shape[0]
-
-    if current_len == target_len:
-        return x
-    elif current_len > target_len:
-        start = (current_len - target_len) // 2
-        return x[start:start + target_len, :]
-    else:
-        pad_len = target_len - current_len
-        return np.pad(
-            x,
-            ((0, pad_len), (0, 0)),
-            mode='constant',
-            constant_values=0.0
-        )
-
-
-def apply_poly_resample(signal_array, src_fs, target_fs):
-    """Polyphase FIR Resampling yang stabil untuk EKG."""
-    x = sanitize_signal(signal_array)
-    if int(src_fs) == int(target_fs):
-        return x
-    gcd = np.gcd(int(src_fs), int(target_fs))
-    up = int(target_fs // gcd)
-    down = int(src_fs // gcd)
-    resampled = signal.resample_poly(x, up, down, axis=0)
-    return sanitize_signal(resampled)
-
-
-def apply_wavelet_denoising(signal_array, wavelet='db4', level=4):
-    """
-    Adaptive Wavelet Denoising - IDENTIK 100% dengan Training v5.0.
-    Menggunakan threshold = std(coeffs[-1]) / 2.0
-    """
-    x = sanitize_signal(signal_array)
-    out = np.zeros_like(x)
-
-    for i in range(x.shape[1]):
-        max_lvl = pywt.dwt_max_level(
-            x.shape[0],
-            pywt.Wavelet(wavelet).dec_len
-        )
-        safe_level = min(level, max_lvl)
-        
-        coeffs = pywt.wavedec(
-            x[:, i],
-            wavelet,
-            level=safe_level
-        )
-
-        # Thresholding murni sesuai konfigurasi riset saat training
-        threshold = np.std(coeffs[-1]) / 2.0
-
-        coeffs[1:] = [
-            pywt.threshold(c, value=threshold, mode='soft')
-            for c in coeffs[1:]
-        ]
-
-        reconstructed = pywt.waverec(coeffs, wavelet)
-        out[:, i] = reconstructed[:x.shape[0]]
-
-    return sanitize_signal(out)
-
-
-def apply_median_baseline(signal_array, kernel_size=51):
-    """Baseline Wander Correction (Kernel wajib ganjil)."""
-    x = sanitize_signal(signal_array)
-    if kernel_size % 2 == 0:
-        kernel_size += 1
-
-    out = np.zeros_like(x)
-    for i in range(x.shape[1]):
-        baseline = signal.medfilt(x[:, i], kernel_size=kernel_size)
-        out[:, i] = x[:, i] - baseline
-
-    return sanitize_signal(out)
-
-
-def apply_butter_bandpass(signal_array, fs, lowcut=0.5, highcut=45.0, order=4):
-    """Butterworth Bandpass Filter dengan proteksi batas Nyquist."""
-    x = sanitize_signal(signal_array)
-    nyq = 0.5 * fs
-    low = max(lowcut / nyq, 0.001)
-    high = min(highcut / nyq, 0.99)
-    
-    if low >= high:
-        return x
-    try:
-        b, a = signal.butter(order, [low, high], btype='band')
-        filtered = signal.filtfilt(b, a, x, axis=0)
-        return sanitize_signal(filtered)
-    except Exception:
-        return x
-
-
-def apply_zscore_clip(signal_array, epsilon=1e-8, clip_min=-5.0, clip_max=5.0):
-    """
-    Z-score Normalization per channel + Clipping Outlier Eksrem.
-    Dipanggil KHUSUS di inference_manager sebelum membentuk tensor AI.
-    """
-    data = sanitize_signal(signal_array)
-    mean = np.mean(data, axis=0)
-    std = np.std(data, axis=0)
-
-    norm = (data - mean) / (std + epsilon)
-    norm = np.clip(norm, clip_min, clip_max)
-    return sanitize_signal(norm)
-
-
-# =====================================================================
 # 2. HOLTER METRIC COMPUTATION (Murni Satuan mV Klinis Tanpa Normalisasi)
 # =====================================================================
 
@@ -224,7 +87,7 @@ def extract_holter_metrics(signal_1d, fs):
 # =====================================================================
 # 3. PURE PIPELINE EXECUTIVE INTERFACE (No Overrides)
 # =====================================================================
-
+from logic.preprocessing import sanitize_signal, validate_signal_shape, advanced_cleaning_pipeline
 def execute_live_pipeline(
     raw_signal,
     src_fs,
@@ -238,7 +101,6 @@ def execute_live_pipeline(
     """
     Eksekusi Murni Parameter UI Workbench Tanpa Pemaksaan Logika Alur di Backend.
     """
-    Ripley_Time = time.perf_counter()
     tracemalloc.start()
     t0 = time.perf_counter()
 
@@ -250,14 +112,17 @@ def execute_live_pipeline(
         v_ref = 2.4; gain = 3.5; mid = 8388608.0
         x = ((x - mid) / (mid - 1.0)) * (v_ref / gain) * 1000.0
 
+    x = advanced_cleaning_pipeline(x, src_fs, target_fs)
+
     # 2. Jalankan Filter Sesuai Urutan Eksperimen Riset v5.0 Anda
-    x = apply_wavelet_denoising(x, wavelet=p_wavelet, level=int(p_w_level))
-    x = apply_median_baseline(x, kernel_size=int(p_median_kernel))
-    x = apply_butter_bandpass(x, fs=src_fs, lowcut=float(p_lowcut), highcut=float(p_highcut))
+    # x = apply_wavelet_denoising(x, wavelet=p_wavelet, level=int(p_w_level))
+    # x = apply_median_baseline(x, kernel_size=int(p_median_kernel))
+    # x = apply_butter_bandpass(x, fs=src_fs, lowcut=float(p_lowcut), highcut=float(p_highcut))
+
 
     # 3. Resampling Adaptif ke Target Frekuensi Kerja
-    if src_fs != target_fs:
-        x = apply_poly_resample(x, src_fs, target_fs)
+    # if src_fs != target_fs:
+    #     x = apply_poly_resample(x, src_fs, target_fs)
 
     t1 = time.perf_counter()
     _, peak = tracemalloc.get_traced_memory()
