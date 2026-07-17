@@ -107,6 +107,9 @@ def get_available_records():
 # =====================================================================
 # LOAD SIGNAL
 # =====================================================================
+import logging
+logger = logging.getLogger("ecg_workbench.data_layer")
+
 def load_raw_signal(
     dataset_type: str,
     record_id: str,
@@ -122,6 +125,7 @@ def load_raw_signal(
     fs : float
         Sampling frequency
     """
+    logger.info(f"Loading record '{record_id}' from dataset '{dataset_type}'...")
 
     if not record_id:
         raise ValueError("record_id kosong.")
@@ -138,7 +142,7 @@ def load_raw_signal(
         )
 
         if not os.path.exists(csv_path):
-            raise FileNotFoundError(csv_path)
+            raise FileNotFoundError(f"File raw ECG simulator tidak ditemukan: {csv_path}")
 
         df = pd.read_csv(csv_path)
         required = ["ch1", "ch2", "ch3"]
@@ -146,73 +150,77 @@ def load_raw_signal(
         for col in required:
             if col not in df.columns:
                 raise ValueError(
-                    f"Kolom '{col}' tidak ditemukan."
+                    f"Kolom '{col}' tidak ditemukan di CSV simulator."
                 )
 
-        signal = df[
-            required
-        ].to_numpy(dtype=np.float32)
-
+        signal = df[required].to_numpy(dtype=np.float32)
         fs = 250.0
-
-        return signal, fs
 
     # =============================================================
     # CHAPMAN
     # =============================================================
-    if dataset_type == "chapman":
+    elif dataset_type == "chapman":
         mat_path = os.path.join(
             cfg.CHAPMAN_DIR,
             f"{record_id}.mat",
         )
 
         if not os.path.exists(mat_path):
-            raise FileNotFoundError(mat_path)
+            raise FileNotFoundError(f"File MAT Chapman tidak ditemukan: {mat_path}")
 
         mat = scipy.io.loadmat(mat_path)
 
         if "val" not in mat:
             raise ValueError(
-                "'val' tidak ditemukan pada MAT file."
+                "'val' tidak ditemukan pada MAT file Chapman."
             )
 
         signal = mat["val"].T.astype(np.float32)
         fs = 500.0
         signal = signal[:, cfg.DEFAULT_LEADS]
-        return signal, fs
 
     # =============================================================
     # PTB-XL
     # =============================================================
-    if dataset_type == "ptbxl_100hz":
-        folder = cfg.PTBXL_100HZ_DIR
+    elif dataset_type in ("ptbxl_100hz", "ptbxl_500hz"):
+        if dataset_type == "ptbxl_100hz":
+            folder = cfg.PTBXL_100HZ_DIR
+        else:
+            folder = cfg.PTBXL_500HZ_DIR
 
-    elif dataset_type == "ptbxl_500hz":
-        folder = cfg.PTBXL_500HZ_DIR
+        record_path = os.path.join(
+            folder,
+            record_id,
+        )
+
+        # Check if record files exist (.hea and .dat)
+        if not os.path.exists(record_path + ".hea"):
+            raise FileNotFoundError(f"File metadata WFDB tidak ditemukan: {record_path}.hea")
+
+        signal, metadata = wfdb.rdsamp(
+            record_path,
+        )
+
+        fs = float(metadata["fs"])
+        signal = signal.astype(np.float32)
+        signal = signal[:, cfg.DEFAULT_LEADS]
 
     else:
         raise ValueError(
             f"Dataset '{dataset_type}' tidak dikenali."
         )
 
-    record_path = os.path.join(
-        folder,
-        record_id,
-    )
+    # =============================================================
+    # VALIDATION
+    # =============================================================
+    if not isinstance(signal, np.ndarray):
+        raise TypeError(f"Sinyal harus berupa numpy.ndarray, tetapi didapat {type(signal)}")
 
-    signal, metadata = wfdb.rdsamp(
-        record_path,
-    )
+    if signal.ndim != 2:
+        raise ValueError(f"Sinyal harus berdimensi 2 [samples, channels], tetapi didapat shape {signal.shape}")
 
-    fs = float(
-        metadata["fs"]
-    )
+    if not isinstance(fs, float) or fs <= 0.0:
+        raise ValueError(f"Sampling frequency (fs) harus berupa float positif, tetapi didapat {fs}")
 
-    signal = signal.astype(np.float32)
-
-    signal = signal[
-        :,
-        cfg.DEFAULT_LEADS,
-    ]
-
-    return signal, fs
+    logger.info(f"Successfully loaded '{record_id}' | Shape: {signal.shape} | fs: {fs} Hz")
+    return signal, fs
