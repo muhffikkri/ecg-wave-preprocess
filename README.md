@@ -27,7 +27,7 @@ Aplikasi ini mengimplementasikan **Clean Layered Architecture** yang memisahkan 
 
 ### 2. Tab 2: ProSim Perangkat Keras DSP Study (Studi Distorsi)
 
-- **Gold Standard Simulator Validation:** Menghubungkan berkas biner/CSV tangkapan sensor ADS1eran fisik asli (`raw_ecg.csv`) dengan sinyal referensi murni instrumen medis (`latest_prosim_calibrated_mv.csv`).
+- **Gold Standard Simulator Validation:** Menghubungkan berkas biner/CSV tangkapan sensor ADS1293 fisik asli (`raw_ecg.csv`) dengan sinyal referensi murni instrumen medis (`latest_prosim_calibrated_mv.csv`).
 - **Inherent Hardware Noise Mapping:** Mengotomatisasi Transformasi Fourier Riil (FFT via `rfftfreq`) untuk melacak tumpukan energi derau laten perangkat keras (seperti Power Line Interference 50Hz/60Hz atau fluktuasi catu daya).
 - **Interactive Phase Shift & Attenuation Evaluation:** Mensimulasikan perbandingan dampak filter digital interaktif. Menunjukkan secara visual perbedaan fatal filter kausal konvensional (`lfilter`) yang merusak pergeseran fase segmen ST, dibandingkan filter optimasi non-kausal (`filtfilt`) yang memberikan perlindungan _zero-phase distortion_.
 - **Kuantifikasi Redaman Puncak R:** Menghitung persentase deviasi akurat pada titik puncak kelistrikan jantung sejati ($R\text{-peak}$) untuk menguji hipotesis agresivitas filter.
@@ -111,7 +111,7 @@ Eksekusi server ASGI lokal menggunakan modul Python dari _root project_ direktor
 
 ```bash
 # python -m src.app.app_layer
-uvicorn app.main:app --reload
+uvicorn src.app.main:app --reload
 ```
 
 Jika berhasil, terminal akan menampilkan log pesan uvicorn sukses berjalan:
