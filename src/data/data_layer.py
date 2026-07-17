@@ -101,6 +101,22 @@ def get_available_records():
             and any(k in d for k in keywords)
         )
 
+    # -------------------------------------------------------------
+    # Sensor Records (Dynamic folders)
+    # -------------------------------------------------------------
+    if os.path.isdir(cfg.SENSOR_RECORD_DIR):
+        for entry in os.scandir(cfg.SENSOR_RECORD_DIR):
+            if entry.is_dir():
+                folder_name = entry.name
+                folder_path = os.path.join(cfg.SENSOR_RECORD_DIR, folder_name)
+                records[folder_name] = sorted(
+                    {
+                        os.path.splitext(f)[0]
+                        for f in os.listdir(folder_path)
+                        if f.endswith(".csv")
+                    }
+                )
+
     return records
 
 
@@ -205,6 +221,44 @@ def load_raw_signal(
         signal = signal.astype(np.float32)
         signal = signal[:, cfg.DEFAULT_LEADS]
 
+    # =============================================================
+    # SENSOR RECORD (DYNAMIC CHANNELS)
+    # =============================================================
+    elif dataset_type not in ("chapman", "ptbxl_100hz", "ptbxl_500hz", "prosim_simulator"):
+        csv_path = os.path.join(
+            cfg.SENSOR_RECORD_DIR,
+            dataset_type,
+            f"{record_id}.csv"
+        )
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"File CSV sensor record tidak ditemukan: {csv_path}")
+
+        df = pd.read_csv(csv_path)
+        required = ["lead_i_mV", "lead_ii_mV", "lead_iii_mV"]
+        for col in required:
+            if col not in df.columns:
+                raise ValueError(
+                    f"Kolom '{col}' tidak ditemukan di CSV."
+                )
+
+        signal = df[required].to_numpy(dtype=np.float32)
+
+        # Load sampling frequency dynamically from metadata json
+        json_path = os.path.join(
+            cfg.SENSOR_RECORD_DIR,
+            dataset_type,
+            f"{record_id}.json"
+        )
+        fs = 250.0
+        if os.path.exists(json_path):
+            try:
+                import json
+                with open(json_path, "r") as f:
+                    meta = json.load(f)
+                fs = float(meta.get("sample_rate_hz", 250.0))
+            except Exception as e:
+                logger.warning(f"Gagal membaca sampling rate dari JSON: {e}")
+
     else:
         raise ValueError(
             f"Dataset '{dataset_type}' tidak dikenali."
@@ -223,4 +277,4 @@ def load_raw_signal(
         raise ValueError(f"Sampling frequency (fs) harus berupa float positif, tetapi didapat {fs}")
 
     logger.info(f"Successfully loaded '{record_id}' | Shape: {signal.shape} | fs: {fs} Hz")
-    return signal, fs
+    return signal, fs
