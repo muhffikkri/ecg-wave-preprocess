@@ -138,9 +138,10 @@ function switchTab(tabId) {
 // =========================================================================
 // 6. DATASET OPTIONS API
 // =========================================================================
-// =========================================================================
 // 6. DATASET OPTIONS API
 // =========================================================================
+let datasetsInitialized = false;
+
 async function loadRecordOptions() {
   try {
     const res = await fetch(`${API_BASE}/api/records`);
@@ -149,6 +150,45 @@ async function loadRecordOptions() {
     const datasetEl = document.getElementById("dataset");
     const recordSelect = document.getElementById("record_id");
     if (!datasetEl || !recordSelect) return;
+
+    // Dynamically populate datasets if not done yet
+    if (!datasetsInitialized) {
+      const currentSelected = datasetEl.value;
+      datasetEl.innerHTML = "";
+      
+      const standardKeys = ["prosim_simulator", "ptbxl_100hz", "ptbxl_500hz", "chapman"];
+      const standardLabels = {
+        "prosim_simulator": "ProSim Simulator",
+        "ptbxl_100hz": "PTB-XL (100Hz)",
+        "ptbxl_500hz": "PTB-XL (500Hz)",
+        "chapman": "Chapman"
+      };
+      
+      standardKeys.forEach(key => {
+        if (data[key]) {
+          const opt = document.createElement("option");
+          opt.value = key;
+          opt.innerText = standardLabels[key] || key;
+          datasetEl.appendChild(opt);
+        }
+      });
+      
+      Object.keys(data).forEach(key => {
+        if (!standardKeys.includes(key)) {
+          const opt = document.createElement("option");
+          opt.value = key;
+          opt.innerText = key;
+          datasetEl.appendChild(opt);
+        }
+      });
+      
+      if (data[currentSelected]) {
+        datasetEl.value = currentSelected;
+      } else {
+        datasetEl.selectedIndex = 0;
+      }
+      datasetsInitialized = true;
+    }
 
     const dataset = datasetEl.value;
 
@@ -165,11 +205,12 @@ async function loadRecordOptions() {
       setTextBoxValue("highcut", "45");
       setSliderValue("w_level", "lbl_w_level", "4");
       setTextBoxValue("model_rate", "100");
-    } else if (dataset === "prosim_simulator") {
+    } else {
+      // Fallback for ProSim and any dynamic sensor records
       setTextBoxValue("median_kernel", "51");
       setTextBoxValue("highcut", "45");
       setSliderValue("w_level", "lbl_w_level", "4");
-      setTextBoxValue("model_rate", "500"); // default to 500hz model as fallback
+      setTextBoxValue("model_rate", "500");
     }
     // -------------------------------------------------------------
 
@@ -221,7 +262,7 @@ async function triggerProcessing() {
     const med = getVal("median_kernel");
     const low = getVal("lowcut");
     const high = getVal("highcut");
-    
+
     // Resolve model_id dynamically
     const m_rate = getVal("model_rate");
     const m_schema = getVal("model_schema");
