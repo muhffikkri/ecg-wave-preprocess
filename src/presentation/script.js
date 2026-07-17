@@ -155,22 +155,21 @@ async function loadRecordOptions() {
     // -------------------------------------------------------------
     // SMART DEFAULT SELECTION (Sinkronisasi Parameter v5.0 Sebelum Inferensi)
     // -------------------------------------------------------------
-    if (dataset === "ptbxl_500hz") {
+    if (dataset === "ptbxl_500hz" || dataset === "chapman") {
       setTextBoxValue("median_kernel", "101");
       setTextBoxValue("highcut", "100");
       setSliderValue("w_level", "lbl_w_level", "4");
+      setTextBoxValue("model_rate", "500");
     } else if (dataset === "ptbxl_100hz") {
       setTextBoxValue("median_kernel", "51");
       setTextBoxValue("highcut", "45");
       setSliderValue("w_level", "lbl_w_level", "4");
-    } else if (dataset === "chapman") {
-      setTextBoxValue("median_kernel", "51");
-      setTextBoxValue("highcut", "100"); // Dataset Chapman umumnya membutuhkan highcut lebar
-      setSliderValue("w_level", "lbl_w_level", "4");
+      setTextBoxValue("model_rate", "100");
     } else if (dataset === "prosim_simulator") {
       setTextBoxValue("median_kernel", "51");
       setTextBoxValue("highcut", "45");
       setSliderValue("w_level", "lbl_w_level", "4");
+      setTextBoxValue("model_rate", "500"); // default to 500hz model as fallback
     }
     // -------------------------------------------------------------
 
@@ -222,8 +221,14 @@ async function triggerProcessing() {
     const med = getVal("median_kernel");
     const low = getVal("lowcut");
     const high = getVal("highcut");
+    
+    // Resolve model_id dynamically
+    const m_rate = getVal("model_rate");
+    const m_schema = getVal("model_schema");
+    const model_id = `${m_schema}_${m_rate}_to_250`;
 
-    const url = `${API_BASE}/api/process?dataset=${d}&record_id=${r}&target_fs=${t_fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}`;
+    const url = `${API_BASE}/api/process?dataset=${d}&record_id=${r}&target_fs=${t_fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}&model_id=${model_id}`;
+
 
     const res = await fetch(url);
     const result = await res.json();

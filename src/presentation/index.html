@@ -180,6 +180,23 @@
           <input id="highcut" type="number" step="1" value="45" />
         </div>
 
+        <div class="control-group">
+          <label>Model Rate</label>
+          <select id="model_rate" onchange="triggerProcessing()">
+            <option value="500">500Hz to 250Hz</option>
+            <option value="100">100Hz to 250Hz</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label>Model Schema</label>
+          <select id="model_schema" onchange="triggerProcessing()">
+            <option value="multilabel">Multi-Label (Sigmoid)</option>
+            <option value="multiclass">Multi-Class (Softmax)</option>
+          </select>
+        </div>
+
+
         <!-- Perbaikan 9: Perubahan inner <span> Hardware Metric -->
         <div class="hardware-metrics">
           <div class="metric-item">Latency : <span id="val_latency">-- ms</span></div>
