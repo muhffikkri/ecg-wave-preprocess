@@ -87,7 +87,12 @@ def extract_holter_metrics(signal_1d, fs):
 # =====================================================================
 # 3. PURE PIPELINE EXECUTIVE INTERFACE (No Overrides)
 # =====================================================================
+import logging
+from app import config as cfg
 from logic.preprocessing import sanitize_signal, validate_signal_shape, advanced_cleaning_pipeline
+
+logger = logging.getLogger("ecg_workbench.logic_layer")
+
 def execute_live_pipeline(
     raw_signal,
     src_fs,
@@ -109,20 +114,22 @@ def execute_live_pipeline(
 
     # 1. Komparasi Kalibrasi Tegangan Hardware ADS1293
     if np.abs(np.mean(x)) > 10000:
-        v_ref = 2.4; gain = 3.5; mid = 8388608.0
+        v_ref = cfg.ADS1293_VREF
+        gain = cfg.ADS1293_GAIN
+        mid = cfg.ADS1293_MID
         x = ((x - mid) / (mid - 1.0)) * (v_ref / gain) * 1000.0
 
-    x = advanced_cleaning_pipeline(x, src_fs, target_fs)
-
     # 2. Jalankan Filter Sesuai Urutan Eksperimen Riset v5.0 Anda
-    # x = apply_wavelet_denoising(x, wavelet=p_wavelet, level=int(p_w_level))
-    # x = apply_median_baseline(x, kernel_size=int(p_median_kernel))
-    # x = apply_butter_bandpass(x, fs=src_fs, lowcut=float(p_lowcut), highcut=float(p_highcut))
-
-
-    # 3. Resampling Adaptif ke Target Frekuensi Kerja
-    # if src_fs != target_fs:
-    #     x = apply_poly_resample(x, src_fs, target_fs)
+    x = advanced_cleaning_pipeline(
+        raw_signal=x,
+        src_fs=src_fs,
+        target_fs=target_fs,
+        p_wavelet=p_wavelet,
+        p_w_level=p_w_level,
+        p_median_kernel=p_median_kernel,
+        p_lowcut=p_lowcut,
+        p_highcut=p_highcut,
+    )
 
     t1 = time.perf_counter()
     _, peak = tracemalloc.get_traced_memory()
@@ -138,4 +145,4 @@ def execute_live_pipeline(
         "holter": holter,
     }
 
-    return x, metrics
+    return x, metrics

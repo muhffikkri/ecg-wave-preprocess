@@ -11,6 +11,8 @@ from scipy.signal import (
 )
 import pywt
 
+from app import config as cfg
+
 
 # =========================================================
 # GLOBAL CONFIG
@@ -316,10 +318,19 @@ def apply_zscore_clip(
 # MAIN DSP PIPELINE
 # =========================================================
 
+# =========================================================
+# MAIN DSP PIPELINE
+# =========================================================
+
 def advanced_cleaning_pipeline_offline(
     raw_signal,
     src_fs,
-    target_fs
+    target_fs,
+    p_wavelet=None,
+    p_w_level=None,
+    p_median_kernel=None,
+    p_lowcut=None,
+    p_highcut=None,
 ):
     """
     PIPELINE:
@@ -333,21 +344,34 @@ def advanced_cleaning_pipeline_offline(
     x = sanitize_signal(raw_signal)
     x = validate_signal_shape(x)
 
+    # Resolve default values
+    wavelet = p_wavelet if p_wavelet is not None else cfg.WAVELET_DEFAULT
+    w_level = int(p_w_level) if p_w_level is not None else cfg.WAVELET_LEVEL_DEFAULT
+    lowcut = float(p_lowcut) if p_lowcut is not None else cfg.BUTTERWORTH_LOWCUT
+
+    if p_median_kernel is not None:
+        kernel_size = int(p_median_kernel)
+    else:
+        kernel_size = cfg.MEDIAN_KERNEL_500 if src_fs >= 500 else cfg.MEDIAN_KERNEL_DEFAULT
+
+    if p_highcut is not None:
+        highcut = float(p_highcut)
+    else:
+        highcut = cfg.BUTTERWORTH_HIGHCUT_250 if src_fs >= 250 else cfg.BUTTERWORTH_HIGHCUT_DEFAULT
+
     # =====================================================
     # 1. Wavelet Denoising
     # =====================================================
 
     x = apply_wavelet_denoising(
         x,
-        wavelet='db4',
-        level=4
+        wavelet=wavelet,
+        level=w_level
     )
 
     # =====================================================
     # 2. Baseline Correction
     # =====================================================
-
-    kernel_size = 101 if src_fs >= 500 else 51
 
     x = apply_median_baseline(
         x,
@@ -358,12 +382,10 @@ def advanced_cleaning_pipeline_offline(
     # 3. Bandpass
     # =====================================================
 
-    highcut = 100.0 if src_fs >= 250 else 45.0
-
     x = apply_butter_bandpass(
         x,
         fs=src_fs,
-        lowcut=0.5,
+        lowcut=lowcut,
         highcut=highcut,
         order=4
     )
@@ -381,10 +403,9 @@ def advanced_cleaning_pipeline_offline(
         )
 
     # =====================================================
-    # 5. Normalize
+    # 5. Normalize (Removed to prevent double normalization)
     # =====================================================
-
-    x = apply_zscore_clip(x)
+    # x = apply_zscore_clip(x)
 
     return sanitize_signal(x)
 
@@ -396,7 +417,12 @@ def advanced_cleaning_pipeline_offline(
 def advanced_cleaning_pipeline_upsampling(
     raw_signal,
     src_fs,
-    target_fs
+    target_fs,
+    p_wavelet=None,
+    p_w_level=None,
+    p_median_kernel=None,
+    p_lowcut=None,
+    p_highcut=None,
 ):
     """
     PIPELINE:
@@ -405,9 +431,17 @@ def advanced_cleaning_pipeline_upsampling(
     Contoh:
     - 100 Hz -> 250 Hz
     """
+    from app import config as cfg
 
     x = sanitize_signal(raw_signal)
     x = validate_signal_shape(x)
+
+    # Resolve default values
+    wavelet = p_wavelet if p_wavelet is not None else cfg.WAVELET_DEFAULT
+    w_level = int(p_w_level) if p_w_level is not None else cfg.WAVELET_LEVEL_DEFAULT
+    kernel_size = int(p_median_kernel) if p_median_kernel is not None else cfg.MEDIAN_KERNEL_DEFAULT
+    lowcut = float(p_lowcut) if p_lowcut is not None else cfg.BUTTERWORTH_LOWCUT
+    highcut = float(p_highcut) if p_highcut is not None else cfg.BUTTERWORTH_HIGHCUT_DEFAULT
 
     # =====================================================
     # 1. Upsampling terlebih dahulu
@@ -425,8 +459,8 @@ def advanced_cleaning_pipeline_upsampling(
 
     x = apply_wavelet_denoising(
         x,
-        wavelet='db4',
-        level=4
+        wavelet=wavelet,
+        level=w_level
     )
 
     # =====================================================
@@ -435,7 +469,7 @@ def advanced_cleaning_pipeline_upsampling(
 
     x = apply_median_baseline(
         x,
-        kernel_size=51
+        kernel_size=kernel_size
     )
 
     # =====================================================
@@ -445,16 +479,15 @@ def advanced_cleaning_pipeline_upsampling(
     x = apply_butter_bandpass(
         x,
         fs=target_fs,
-        lowcut=0.5,
-        highcut=45.0,
+        lowcut=lowcut,
+        highcut=highcut,
         order=4
     )
 
     # =====================================================
-    # 5. Normalize
+    # 5. Normalize (Removed to prevent double normalization)
     # =====================================================
-
-    x = apply_zscore_clip(x)
+    # x = apply_zscore_clip(x)
 
     return sanitize_signal(x)
 
@@ -466,7 +499,12 @@ def advanced_cleaning_pipeline_upsampling(
 def advanced_cleaning_pipeline(
     raw_signal,
     src_fs,
-    target_fs=250.0
+    target_fs=None,
+    p_wavelet=None,
+    p_w_level=None,
+    p_median_kernel=None,
+    p_lowcut=None,
+    p_highcut=None,
 ):
     """
     SMART ROUTER.
@@ -475,6 +513,12 @@ def advanced_cleaning_pipeline(
     - upsampling pipeline
     - offline/native pipeline
     """
+    from app import config as cfg
+
+    if target_fs is None:
+        target_fs = cfg.TARGET_FS
+    else:
+        target_fs = float(target_fs)
 
     raw_signal = sanitize_signal(raw_signal)
     raw_signal = validate_signal_shape(raw_signal)
@@ -484,7 +528,12 @@ def advanced_cleaning_pipeline(
         return advanced_cleaning_pipeline_upsampling(
             raw_signal=raw_signal,
             src_fs=src_fs,
-            target_fs=target_fs
+            target_fs=target_fs,
+            p_wavelet=p_wavelet,
+            p_w_level=p_w_level,
+            p_median_kernel=p_median_kernel,
+            p_lowcut=p_lowcut,
+            p_highcut=p_highcut,
         )
 
     else:
@@ -492,8 +541,14 @@ def advanced_cleaning_pipeline(
         return advanced_cleaning_pipeline_offline(
             raw_signal=raw_signal,
             src_fs=src_fs,
-            target_fs=target_fs
+            target_fs=target_fs,
+            p_wavelet=p_wavelet,
+            p_w_level=p_w_level,
+            p_median_kernel=p_median_kernel,
+            p_lowcut=p_lowcut,
+            p_highcut=p_highcut,
         )
+
 
 
 # =========================================================
