@@ -74,6 +74,8 @@ def resolve_target_class(dataset, record_id):
 
     elif dataset == "prosim_simulator":
         return f"ProSim Simulator ({record_id})"
+    elif dataset not in ("chapman", "ptbxl_100hz", "ptbxl_500hz"):
+        return f"Sensor Record ({record_id})"
     return "Unknown"
 
 
