@@ -193,3 +193,4 @@ pyrightconfig.json
 
 dataset/
 models/
+output/filtered_frames/
