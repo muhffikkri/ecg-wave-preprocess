@@ -36,6 +36,13 @@ MANIFEST_CHAPMAN = CLEANED_SAMPLE_DIR / "manifest_chapman.csv"
 MANIFEST_PTBXL = CLEANED_SAMPLE_DIR / "manifest_ptbxl.csv"
 
 # =============================================================================
+# OUTPUT PATHS
+# =============================================================================
+
+OUTPUT_DIR = PROJECT_ROOT / "output"
+FILTERED_FRAMES_DIR = OUTPUT_DIR / "filtered_frames"
+
+# =============================================================================
 # MODEL PATHS
 # =============================================================================
 
@@ -85,7 +92,7 @@ TARGET_CLASSES = (
     "Bradikardia",
 )
 
-DEFAULT_MODEL_ID = "multilabel_500_to_250"
+DEFAULT_MODEL_ID = "softmax_filtered_500to250_cnn"
 
 # =============================================================================
 # APPLICATION METADATA

@@ -14,7 +14,7 @@ if src_dir not in sys.path:
 import time
 import logging
 import numpy as np
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,10 +22,11 @@ from fastapi.staticfiles import StaticFiles
 from app import config as cfg
 from app import model_registry as reg
 from data.data_layer import get_available_records, load_raw_signal
-from logic.logic_layer import execute_live_pipeline
+from logic.logic_layer import execute_live_pipeline, save_filtered_frames
 from logic.inference_manager import resolve_target_class, run_dual_model_inference
 from logic.ai_model_manager import load_models, set_active_model, get_active_model_id
 from logic.dsp_simulation_workbench import run_dsp_distortion_analysis
+from logic.quality_metrics import compute_signal_quality_metrics
 
 logger = logging.getLogger("ecg_workbench.main")
 
@@ -93,6 +94,8 @@ def api_process(
     lowcut: float = cfg.BUTTERWORTH_LOWCUT,
     highcut: float = cfg.BUTTERWORTH_HIGHCUT_DEFAULT,
     model_id: str = cfg.DEFAULT_MODEL_ID,
+    save_frames: bool = False,
+    use_raw_for_ai: bool = False,
 ):
     t_start = time.perf_counter()
 
@@ -109,7 +112,7 @@ def api_process(
     logger.info(f"record: {record_id}")
     logger.info(f"sampling rate: {src_fs} Hz")
     logger.info(f"pipeline yang dipilih: {'upsampling' if src_fs < target_fs else 'offline'}")
-    logger.info(f"parameter preprocessing: wavelet={wavelet}, level={w_level}, median_kernel={median_kernel}, lowcut={lowcut}, highcut={highcut}, model_id={model_id}")
+    logger.info(f"parameter preprocessing: wavelet={wavelet}, level={w_level}, median_kernel={median_kernel}, lowcut={lowcut}, highcut={highcut}, model_id={model_id}, save_frames={save_frames}, use_raw_for_ai={use_raw_for_ai}")
 
     # Run clean pipeline (steps 1-7)
     clean_signal, metrics = execute_live_pipeline(
@@ -121,7 +124,22 @@ def api_process(
         p_median_kernel=median_kernel,
         p_lowcut=lowcut,
         p_highcut=highcut,
+        save_frames=save_frames,
+        record_id=record_id,
+        file_format="csv" if save_frames else "npy",
     )
+
+    # Decide whether to feed raw or filtered signal to the AI model
+    if use_raw_for_ai:
+        from logic.preprocessing import sanitize_signal, validate_signal_shape, apply_poly_resample
+        raw_sanitized = sanitize_signal(raw_signal)
+        raw_validated = validate_signal_shape(raw_sanitized)
+        if src_fs != target_fs:
+            ai_input_signal = apply_poly_resample(raw_validated, src_fs, target_fs)
+        else:
+            ai_input_signal = raw_validated
+    else:
+        ai_input_signal = clean_signal
 
     # LOG ===== PREPROCESS =====
     logger.info("===== PREPROCESS =====")
@@ -138,14 +156,14 @@ def api_process(
     logger.info("===== MODEL =====")
     logger.info(f"model aktif: {model_id} ({model_info['model_name']})")
     logger.info(f"task: {model_info['task_type']}")
-    logger.info(f"input tensor shape: (1, {cfg.MODEL_INPUT_LENGTH}, {clean_signal.shape[1]})")
+    logger.info(f"input tensor shape: (1, {cfg.MODEL_INPUT_LENGTH}, {ai_input_signal.shape[1]})")
 
     # Resolve target class (ground truth)
     target_class = resolve_target_class(dataset, record_id)
 
     # Run AI Model inference (steps 8-10)
     inference = run_dual_model_inference(
-        clean_signal,
+        ai_input_signal,
         model_id=model_id,
     )
 
@@ -166,7 +184,15 @@ def api_process(
     logger.info(f"processing time: {processing_time_ms:.2f} ms")
     logger.info("=========================\n")
 
-    return {
+    # Calculate Signal Quality Metrics
+    quality_metrics = compute_signal_quality_metrics(
+        raw_signal=raw_signal,
+        filtered_signal=clean_signal,
+        src_fs=src_fs,
+        target_fs=target_fs,
+    )
+
+    response_data = {
         "target_class": target_class,
         "raw_signals": raw_dict,
         "clean_signals": clean_dict,
@@ -178,9 +204,105 @@ def api_process(
             "latency_ms": metrics["latency_ms"],
             "peak_memory_mb": metrics["peak_memory_mb"],
             "total_processing_time_ms": processing_time_ms,
+            "lead1": quality_metrics["lead1"],
+            "lead2": quality_metrics["lead2"],
+            "lead3": quality_metrics["lead3"],
+            "summary": quality_metrics["summary"],
         },
         "holter": metrics["holter"],
     }
+
+    if "saved_frames" in metrics:
+        response_data["saved_frames"] = metrics["saved_frames"]
+
+    return response_data
+
+
+# =====================================================================
+# SAVE FILTERED FRAMES ENDPOINT
+# =====================================================================
+@app.get("/api/save_frames")
+def api_save_frames(
+    dataset: str,
+    record_id: str,
+    target_fs: float = cfg.TARGET_FS,
+    wavelet: str = cfg.WAVELET_DEFAULT,
+    w_level: int = cfg.WAVELET_LEVEL_DEFAULT,
+    median_kernel: int = cfg.MEDIAN_KERNEL_DEFAULT,
+    lowcut: float = cfg.BUTTERWORTH_LOWCUT,
+    highcut: float = cfg.BUTTERWORTH_HIGHCUT_DEFAULT,
+    file_format: str = "csv",
+    frame_size: int = cfg.MODEL_INPUT_LENGTH,
+):
+    raw_signal, src_fs = load_raw_signal(dataset, record_id)
+    clean_signal, metrics = execute_live_pipeline(
+        raw_signal=raw_signal,
+        src_fs=src_fs,
+        target_fs=target_fs,
+        p_wavelet=wavelet,
+        p_w_level=w_level,
+        p_median_kernel=median_kernel,
+        p_lowcut=lowcut,
+        p_highcut=highcut,
+        save_frames=True,
+        record_id=record_id,
+        frame_size=frame_size,
+        file_format=file_format,
+    )
+    saved_info = metrics.get("saved_frames", {})
+    return {
+        "status": "success",
+        "dataset": dataset,
+        "record_id": record_id,
+        "saved_frames": saved_info,
+    }
+
+
+# =====================================================================
+# DOWNLOAD FILTERED CSV FILE ENDPOINT
+# =====================================================================
+@app.get("/api/download_csv")
+def api_download_csv(
+    dataset: str,
+    record_id: str,
+    target_fs: float = cfg.TARGET_FS,
+    wavelet: str = cfg.WAVELET_DEFAULT,
+    w_level: int = cfg.WAVELET_LEVEL_DEFAULT,
+    median_kernel: int = cfg.MEDIAN_KERNEL_DEFAULT,
+    lowcut: float = cfg.BUTTERWORTH_LOWCUT,
+    highcut: float = cfg.BUTTERWORTH_HIGHCUT_DEFAULT,
+    frame_size: int = cfg.MODEL_INPUT_LENGTH,
+):
+    raw_signal, src_fs = load_raw_signal(dataset, record_id)
+    clean_signal, metrics = execute_live_pipeline(
+        raw_signal=raw_signal,
+        src_fs=src_fs,
+        target_fs=target_fs,
+        p_wavelet=wavelet,
+        p_w_level=w_level,
+        p_median_kernel=median_kernel,
+        p_lowcut=lowcut,
+        p_highcut=highcut,
+        save_frames=True,
+        record_id=record_id,
+        frame_size=frame_size,
+        file_format="csv",
+    )
+    saved_files = metrics.get("saved_frames", {}).get("saved_files", [])
+    csv_file = None
+    for f in saved_files:
+        if f.endswith(".csv"):
+            csv_file = f
+            break
+
+    if csv_file and os.path.exists(csv_file):
+        return FileResponse(
+            path=csv_file,
+            filename=f"{record_id}_filtered.csv",
+            media_type="text/csv",
+        )
+    else:
+        raise HTTPException(status_code=500, detail="Gagal membuat file CSV")
 
 
 # =====================================================================
