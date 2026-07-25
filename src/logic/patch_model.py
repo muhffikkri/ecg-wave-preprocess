@@ -47,6 +47,17 @@ def clean_renorm_keys(obj):
             obj.pop("renorm", None)
             obj.pop("renorm_clipping", None)
             obj.pop("renorm_momentum", None)
+        
+        # Strip input_axes and output_axes if they exist in config to prevent deserialization compatibility issues
+        if "config" in obj and isinstance(obj["config"], dict):
+            obj["config"].pop("input_axes", None)
+            obj["config"].pop("output_axes", None)
+
+        # Strip sliding_window from MultiHeadAttention layers to prevent deserialization compatibility issues
+        if obj.get("class_name") == "MultiHeadAttention":
+            if "config" in obj and isinstance(obj["config"], dict):
+                obj["config"].pop("sliding_window", None)
+            
         for k, v in obj.items():
             clean_renorm_keys(v)
     elif isinstance(obj, list):
@@ -192,6 +203,14 @@ def patch_and_convert_model(model_id, model_info):
     try:
         converter = tf.lite.TFLiteConverter.from_keras_model(final_model)
         converter.optimizations = [tf.lite.Optimize.DEFAULT]
+        
+        if "lstm" in model_id:
+            converter.target_spec.supported_ops = [
+                tf.lite.OpsSet.TFLITE_BUILTINS,
+                tf.lite.OpsSet.SELECT_TF_OPS
+            ]
+            converter._experimental_lower_tensor_list_ops = False
+            
         tflite_model = converter.convert()
 
         print("... 6. Menyimpan berkas biner TFLite...")

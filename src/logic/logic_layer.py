@@ -3,14 +3,20 @@
 # PURPOSE: Pure Research-Grade v5.0 DSP Engine (No Backend Overrides)
 # =====================================================================
 
+import logging
 import math
+import os
+from pathlib import Path
 import time
 import tracemalloc
 from fractions import Fraction
 
 import numpy as np
+import pandas as pd
 import pywt
 from scipy import signal
+
+from app import config as cfg
 
 
 # =====================================================================
@@ -85,7 +91,144 @@ def extract_holter_metrics(signal_1d, fs):
 
 
 # =====================================================================
-# 3. PURE PIPELINE EXECUTIVE INTERFACE (No Overrides)
+# 3. FILTERED FRAME SAVER & STORAGE UTILITIES
+# =====================================================================
+import os
+from pathlib import Path
+import pandas as pd
+
+def save_filtered_frames(
+    filtered_signal,
+    output_dir=None,
+    record_id="record",
+    frame_size=cfg.MODEL_INPUT_LENGTH,
+    stride=None,
+    file_format="npy",
+    save_full_signal=True,
+):
+    """
+    Menyimpan sinyal EKG yang telah difilter ke dalam bentuk frame / segmen terpotong (.npy / .csv / .npz).
+
+    Parameters
+    ----------
+    filtered_signal : np.ndarray
+        Array sinyal EKG 2D [timesteps, channels] yang sudah melalui pipeline filtering.
+    output_dir : str or Path, optional
+        Direktori tujuan penyimpanan file frame. Jika None, default ke cfg.FILTERED_FRAMES_DIR.
+    record_id : str, optional
+        ID atau nama rekaman sebagai prefix file (default: "record").
+    frame_size : int, optional
+        Ukuran frame (jumlah sampel) per potongan (default: 2500 sampel sesuai input model).
+    stride : int, optional
+        Pergeseran sampel antar frame (default: sama dengan frame_size / non-overlapping).
+    file_format : str, optional
+        Format penyimpanan file: 'npy', 'npz', atau 'csv' (default: 'npy').
+    save_full_signal : bool, optional
+        Jika True, juga menyimpan sinyal utuh filtered_signal sebagai file tersendiri.
+
+    Returns
+    -------
+    dict
+        Metadata penyimpanan frame (jumlah frame, daftar path tersimpan, shape, status).
+    """
+    try:
+        if output_dir is None:
+            output_dir = getattr(cfg, "FILTERED_FRAMES_DIR", cfg.PROJECT_ROOT / "output" / "filtered_frames")
+        
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        filtered_signal = np.asarray(filtered_signal, dtype=np.float32)
+        if filtered_signal.ndim != 2:
+            raise ValueError(f"filtered_signal harus 2D [timesteps, channels], didapat ndim={filtered_signal.ndim}")
+
+        total_samples, num_channels = filtered_signal.shape
+        if stride is None or stride <= 0:
+            stride = frame_size
+
+        saved_files = []
+        file_format = file_format.lower().strip()
+
+        # 1. Simpan sinyal filtered utuh
+        if save_full_signal:
+            full_filename = f"{record_id}_full_filtered.{file_format}"
+            full_filepath = output_path / full_filename
+
+            if file_format == "npy":
+                np.save(full_filepath, filtered_signal)
+            elif file_format == "npz":
+                np.savez_compressed(full_filepath, signal=filtered_signal)
+            elif file_format == "csv":
+                cols = [f"lead_{i}" for i in range(num_channels)]
+                df = pd.DataFrame(filtered_signal, columns=cols)
+                df.to_csv(full_filepath, index=False)
+            
+            saved_files.append(str(full_filepath))
+
+        # 2. Pemotongan sinyal menjadi frame-frame (windowing)
+        frame_count = 0
+        if frame_size is not None and frame_size > 0:
+            idx = 0
+            while idx + frame_size <= total_samples:
+                frame = filtered_signal[idx : idx + frame_size, :]
+                frame_filename = f"{record_id}_frame_{frame_count:04d}.{file_format}"
+                frame_filepath = output_path / frame_filename
+
+                if file_format == "npy":
+                    np.save(frame_filepath, frame)
+                elif file_format == "npz":
+                    np.savez_compressed(frame_filepath, frame=frame)
+                elif file_format == "csv":
+                    cols = [f"lead_{i}" for i in range(num_channels)]
+                    df = pd.DataFrame(frame, columns=cols)
+                    df.to_csv(frame_filepath, index=False)
+
+                saved_files.append(str(frame_filepath))
+                frame_count += 1
+                idx += stride
+
+            # Handing sisa sinyal pendek / residual jika belum ada frame yang dibuat
+            if idx < total_samples and frame_count == 0:
+                from logic.preprocessing import ensure_length
+                padded_frame = ensure_length(filtered_signal[idx:, :], target_len=frame_size)
+                frame_filename = f"{record_id}_frame_0000.{file_format}"
+                frame_filepath = output_path / frame_filename
+
+                if file_format == "npy":
+                    np.save(frame_filepath, padded_frame)
+                elif file_format == "npz":
+                    np.savez_compressed(frame_filepath, frame=padded_frame)
+                elif file_format == "csv":
+                    cols = [f"lead_{i}" for i in range(num_channels)]
+                    df = pd.DataFrame(padded_frame, columns=cols)
+                    df.to_csv(frame_filepath, index=False)
+
+                saved_files.append(str(frame_filepath))
+                frame_count = 1
+
+        logger.info(f"Berhasil menyimpan {len(saved_files)} file frame ({frame_count} frame) ke: {output_path}")
+
+        return {
+            "status": "success",
+            "output_dir": str(output_path),
+            "total_files_saved": len(saved_files),
+            "frame_count": frame_count,
+            "frame_size": frame_size,
+            "saved_files": saved_files,
+        }
+    except Exception as e:
+        logger.error(f"Gagal menyimpan frame yang ter-filter: {e}", exc_info=True)
+        return {
+            "status": "error",
+            "message": str(e),
+            "total_files_saved": 0,
+            "frame_count": 0,
+            "saved_files": [],
+        }
+
+
+# =====================================================================
+# 4. PURE PIPELINE EXECUTIVE INTERFACE (No Overrides)
 # =====================================================================
 import logging
 from app import config as cfg
@@ -102,9 +245,15 @@ def execute_live_pipeline(
     p_median_kernel,
     p_lowcut,
     p_highcut,
+    save_frames: bool = False,
+    output_dir: str = None,
+    record_id: str = "record",
+    frame_size: int = cfg.MODEL_INPUT_LENGTH,
+    file_format: str = "csv",
 ):
     """
     Eksekusi Murni Parameter UI Workbench Tanpa Pemaksaan Logika Alur di Backend.
+    Mendukung opsi penyimpanan frame yang telah ter-filter jika save_frames=True.
     """
     tracemalloc.start()
     t0 = time.perf_counter()
@@ -113,11 +262,11 @@ def execute_live_pipeline(
     x = validate_signal_shape(x)
 
     # 1. Komparasi Kalibrasi Tegangan Hardware ADS1293
-    if np.abs(np.mean(x)) > 10000:
-        v_ref = cfg.ADS1293_VREF
-        gain = cfg.ADS1293_GAIN
-        mid = cfg.ADS1293_MID
-        x = ((x - mid) / (mid - 1.0)) * (v_ref / gain) * 1000.0
+    # if np.abs(np.mean(x)) > 10000:
+    #     v_ref = cfg.ADS1293_VREF
+    #     gain = cfg.ADS1293_GAIN
+    #     mid = cfg.ADS1293_MID
+    #     x = ((x - mid) / (mid - 1.0)) * (v_ref / gain) * 1000.0
 
     # 2. Jalankan Filter Sesuai Urutan Eksperimen Riset v5.0 Anda
     x = advanced_cleaning_pipeline(
@@ -145,4 +294,16 @@ def execute_live_pipeline(
         "holter": holter,
     }
 
-    return x, metrics
+    # 3. Simpan frame yang sudah ter-filter jika opsi diaktifkan
+    if save_frames:
+        save_info = save_filtered_frames(
+            filtered_signal=x,
+            output_dir=output_dir,
+            record_id=record_id,
+            frame_size=frame_size,
+            file_format=file_format,
+        )
+        metrics["saved_frames"] = save_info
+
+    return x, metrics
+
