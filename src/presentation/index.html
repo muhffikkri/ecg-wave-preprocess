@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <!-- Path disesuaikan untuk FastAPI Mounting Static -->
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=1.0.1" />
 </head>
 
 <body>
@@ -59,6 +59,128 @@
       <div class="lead-label">CHANNEL 3 : LEAD III</div>
       <div class="chart-container"><canvas id="raw_lead_2"></canvas></div>
       <div class="chart-container"><canvas id="clean_lead_2"></canvas></div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- SIGNAL QUALITY METRICS -->
+    <!-- ========================================================= -->
+    <div class="quality-metrics-panel">
+      <h3 style="margin-bottom: 15px; text-align: left; font-size: 1.1rem; color: #1d1d1f; border-bottom: 1px solid #e5e5e7; padding-bottom: 8px;">SIGNAL QUALITY METRICS</h3>
+      <div class="metrics-grid">
+        <!-- Lead I -->
+        <div class="metrics-card">
+          <div class="lead-header">LEAD I</div>
+          
+          <div class="metric-section-title">Baseline RMS</div>
+          <div class="metric-row">
+            <span class="metric-lbl">Raw:</span>
+            <span class="metric-val" id="q_l1_b_raw">-- mV</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Filtered:</span>
+            <span class="metric-val" id="q_l1_b_filt">-- mV</span>
+          </div>
+          <div class="metric-row reduction-row">
+            <span class="metric-lbl">Reduction:</span>
+            <span class="metric-val reduction-val" id="q_l1_b_red">-- %</span>
+          </div>
+
+          <div class="metric-section-title">HF Noise Power</div>
+          <div class="metric-row">
+            <span class="metric-lbl">Raw:</span>
+            <span class="metric-val" id="q_l1_n_raw">--</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Filtered:</span>
+            <span class="metric-val" id="q_l1_n_filt">--</span>
+          </div>
+          <div class="metric-row reduction-row">
+            <span class="metric-lbl">Reduction:</span>
+            <span class="metric-val reduction-val" id="q_l1_n_red">-- %</span>
+          </div>
+        </div>
+
+        <!-- Lead II -->
+        <div class="metrics-card">
+          <div class="lead-header">LEAD II</div>
+          
+          <div class="metric-section-title">Baseline RMS</div>
+          <div class="metric-row">
+            <span class="metric-lbl">Raw:</span>
+            <span class="metric-val" id="q_l2_b_raw">-- mV</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Filtered:</span>
+            <span class="metric-val" id="q_l2_b_filt">-- mV</span>
+          </div>
+          <div class="metric-row reduction-row">
+            <span class="metric-lbl">Reduction:</span>
+            <span class="metric-val reduction-val" id="q_l2_b_red">-- %</span>
+          </div>
+
+          <div class="metric-section-title">HF Noise Power</div>
+          <div class="metric-row">
+            <span class="metric-lbl">Raw:</span>
+            <span class="metric-val" id="q_l2_n_raw">--</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Filtered:</span>
+            <span class="metric-val" id="q_l2_n_filt">--</span>
+          </div>
+          <div class="metric-row reduction-row">
+            <span class="metric-lbl">Reduction:</span>
+            <span class="metric-val reduction-val" id="q_l2_n_red">-- %</span>
+          </div>
+        </div>
+
+        <!-- Lead III -->
+        <div class="metrics-card">
+          <div class="lead-header">LEAD III</div>
+          
+          <div class="metric-section-title">Baseline RMS</div>
+          <div class="metric-row">
+            <span class="metric-lbl">Raw:</span>
+            <span class="metric-val" id="q_l3_b_raw">-- mV</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Filtered:</span>
+            <span class="metric-val" id="q_l3_b_filt">-- mV</span>
+          </div>
+          <div class="metric-row reduction-row">
+            <span class="metric-lbl">Reduction:</span>
+            <span class="metric-val reduction-val" id="q_l3_b_red">-- %</span>
+          </div>
+
+          <div class="metric-section-title">HF Noise Power</div>
+          <div class="metric-row">
+            <span class="metric-lbl">Raw:</span>
+            <span class="metric-val" id="q_l3_n_raw">--</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-lbl">Filtered:</span>
+            <span class="metric-val" id="q_l3_n_filt">--</span>
+          </div>
+          <div class="metric-row reduction-row">
+            <span class="metric-lbl">Reduction:</span>
+            <span class="metric-val reduction-val" id="q_l3_n_red">-- %</span>
+          </div>
+        </div>
+
+        <!-- Summary Metrics -->
+        <div class="metrics-card summary-card">
+          <div class="lead-header">SUMMARY METRICS</div>
+          
+          <div class="summary-item">
+            <div class="summary-lbl">Average Baseline Reduction</div>
+            <div class="summary-val" id="q_sum_b_red">-- %</div>
+          </div>
+          
+          <div class="summary-item" style="margin-top: 15px;">
+            <div class="summary-lbl">Average HF Noise Reduction</div>
+            <div class="summary-val" id="q_sum_n_red">-- %</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- HOLTER METRICS DASHBOARD -->
@@ -189,29 +311,40 @@
       </div>
 
       <div class="control-group">
-        <label>Model Rate</label>
-        <select id="model_rate" onchange="triggerProcessing()">
-          <option value="500">500Hz to 250Hz</option>
-          <option value="100">100Hz to 250Hz</option>
+        <label>Model Selection</label>
+        <select id="model_id" onchange="triggerProcessing()">
+          <option value="softmax_filtered_500to250_cnn">Filtered 500Hz to 250Hz (CNN)</option>
+          <option value="softmax_filtered_500to250_cnnattention">Filtered 500Hz to 250Hz (CNN-Attention)</option>
+          <option value="softmax_filtered_500to250_lstm">Filtered 500Hz to 250Hz (LSTM)</option>
+          <option value="softmax_filtered_100to250_cnn">Filtered 100Hz to 250Hz (CNN)</option>
+          <option value="softmax_filtered_100to250_cnnattention">Filtered 100Hz to 250Hz (CNN-Attention)</option>
+          <option value="softmax_filtered_100to250_lstm">Filtered 100Hz to 250Hz (LSTM)</option>
+          <option value="softmax_raw_500to250_cnn">Raw 500Hz to 250Hz (CNN)</option>
+          <option value="softmax_raw_100to250_cnn">Raw 100Hz to 250Hz (CNN)</option>
+          <option value="sigmoid_filtered_500to250_cnn">Filtered 500Hz to 250Hz (Sigmoid CNN)</option>
+          <option value="sigmoid_filtered_100to250_cnn">Filtered 100Hz to 250Hz (Sigmoid CNN)</option>
         </select>
       </div>
 
       <div class="control-group">
-        <label>Model Schema</label>
-        <select id="model_schema" onchange="triggerProcessing()">
-          <option value="multilabel">Multi-Label (Sigmoid)</option>
-          <option value="multiclass">Multi-Class (Softmax)</option>
+        <label>AI Data Source</label>
+        <select id="use_raw_for_ai" onchange="triggerProcessing()">
+          <option value="false">Filtered Data (Default)</option>
+          <option value="true">Raw Data (Testing)</option>
         </select>
       </div>
 
 
-      <!-- Perbaikan 9: Perubahan inner <span> Hardware Metric -->
+      <!-- Hardware Metrics & Action Buttons -->
       <div class="hardware-metrics">
         <div class="metric-item">Latency : <span id="val_latency">-- ms</span></div>
         <div class="metric-item">Peak Memory : <span id="val_memory">-- MB</span></div>
       </div>
 
-      <button class="btn-update" onclick="triggerProcessing()">UPDATE PIPELINE</button>
+      <div style="display: flex; gap: 10px; width: 100%; flex: 1 1 100%;">
+        <button class="btn-update" onclick="triggerProcessing()">UPDATE PIPELINE</button>
+        <button id="btn_save_csv" class="btn-update" style="background: #34c759;" onclick="saveFilteredCSV()">SAVE CSV</button>
+      </div>
     </div>
   </div>
 
@@ -306,7 +439,7 @@
   </div>
 
   <!-- JavaScript Path Terintegrasi FastAPI -->
-  <script src="/static/script.js"></script>
+  <script src="/static/script.js?v=1.0.1"></script>
 </body>
 
 </html>

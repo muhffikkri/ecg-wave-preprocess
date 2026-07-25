@@ -199,18 +199,18 @@ async function loadRecordOptions() {
       setTextBoxValue("median_kernel", "101");
       setTextBoxValue("highcut", "100");
       setSliderValue("w_level", "lbl_w_level", "4");
-      setTextBoxValue("model_rate", "500");
+      setTextBoxValue("model_id", "softmax_filtered_500to250_cnn");
     } else if (dataset === "ptbxl_100hz") {
       setTextBoxValue("median_kernel", "51");
       setTextBoxValue("highcut", "45");
       setSliderValue("w_level", "lbl_w_level", "4");
-      setTextBoxValue("model_rate", "100");
+      setTextBoxValue("model_id", "softmax_filtered_100to250_cnn");
     } else {
       // Fallback for ProSim and any dynamic sensor records
       setTextBoxValue("median_kernel", "51");
       setTextBoxValue("highcut", "45");
       setSliderValue("w_level", "lbl_w_level", "4");
-      setTextBoxValue("model_rate", "500");
+      setTextBoxValue("model_id", "softmax_filtered_500to250_cnn");
     }
     // -------------------------------------------------------------
 
@@ -249,6 +249,8 @@ function setSliderValue(inputId, labelId, value) {
 // =========================================================================
 // 7. PROCESSING PIPELINE API (TAB 1 CORE)
 // =========================================================================
+let lastCleanSignals = null;
+
 async function triggerProcessing() {
   const getVal = (id) => document.getElementById(id)?.value || "";
   const r = getVal("record_id");
@@ -263,26 +265,81 @@ async function triggerProcessing() {
     const low = getVal("lowcut");
     const high = getVal("highcut");
 
-    // Resolve model_id dynamically
-    const m_rate = getVal("model_rate");
-    const m_schema = getVal("model_schema");
-    const model_id = `${m_schema}_${m_rate}_to_250`;
+    // Retrieve model_id and use_raw_for_ai directly
+    const model_id = getVal("model_id");
+    const use_raw = getVal("use_raw_for_ai") === "true";
 
-    const url = `${API_BASE}/api/process?dataset=${d}&record_id=${r}&target_fs=${t_fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}&model_id=${model_id}`;
+    const url = `${API_BASE}/api/process?dataset=${d}&record_id=${r}&target_fs=${t_fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}&model_id=${model_id}&use_raw_for_ai=${use_raw}`;
 
 
     const res = await fetch(url);
     const result = await res.json();
+
+    lastCleanSignals = result.clean_signals || null;
 
     // Jalankan seluruh fungsi modular perenderan data
     renderDiagnosis(result);
     renderPerformance(result);
     renderHolter(result);
     renderCharts(result);
+    renderSignalQualityMetrics(result);
   } catch (err) {
     console.error("Gagal memproses pipeline DSP:", err);
     setText("sample_class", "Offline");
     setText("ai_class", "Offline");
+  }
+}
+
+// =========================================================================
+// 7.1. SAVE CSV FUNCTION
+// =========================================================================
+async function saveFilteredCSV() {
+  const getVal = (id) => document.getElementById(id)?.value || "";
+  const d = getVal("dataset");
+  const r = getVal("record_id");
+  if (!r) {
+    alert("Silakan pilih Record ID terlebih dahulu.");
+    return;
+  }
+
+  const t_fs = getVal("target_fs");
+  const wav = getVal("wavelet");
+  const lvl = getVal("w_level");
+  const med = getVal("median_kernel");
+  const low = getVal("lowcut");
+  const high = getVal("highcut");
+
+  const saveBtn = document.getElementById("btn_save_csv");
+  const origText = saveBtn ? saveBtn.innerText : "SAVE CSV";
+  if (saveBtn) saveBtn.innerText = "SAVING CSV...";
+
+  try {
+    // 1. Simpan CSV di server & dapatkan metadata
+    const saveUrl = `${API_BASE}/api/save_frames?dataset=${d}&record_id=${r}&target_fs=${t_fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}&file_format=csv`;
+    const res = await fetch(saveUrl);
+    const result = await res.json();
+
+    // 2. Unduh file CSV secara langsung di peramban pengguna
+    const downloadUrl = `${API_BASE}/api/download_csv?dataset=${d}&record_id=${r}&target_fs=${t_fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}`;
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `${r}_filtered.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    if (result.status === "success") {
+      const savedCount = result.saved_frames?.total_files_saved || 0;
+      const outDir = result.saved_frames?.output_dir || "output/filtered_frames";
+      alert(`✅ Berhasil! Sinyal CSV diunduh ke peramban & disimpan di server (${savedCount} file CSV):\n${outDir}`);
+    } else {
+      alert("⚠️ Sinyal diunduh ke peramban, namun terjadi kendala di server: " + (result.message || "Unknown error"));
+    }
+  } catch (err) {
+    console.error("Gagal menyimpan file CSV:", err);
+    alert("Terjadi kesalahan koneksi saat menyimpan CSV: " + err.message);
+  } finally {
+    if (saveBtn) saveBtn.innerText = origText;
   }
 }
 
@@ -360,6 +417,89 @@ function renderCharts(result) {
 
     updateChartData(charts[`raw_${i}`], rawData);
     updateChartData(charts[`clean_${i}`], cleanData);
+  }
+}
+
+function renderSignalQualityMetrics(result) {
+  if (!result || !result.metrics) return;
+
+  const setMetricText = (id, val, suffix = "") => {
+    const el = document.getElementById(id);
+    if (el) {
+      if (typeof val === 'number') {
+        el.innerText = `${val.toFixed(id.includes('_red') ? 1 : (id.includes('_n_') ? 4 : 3))}${suffix}`;
+      } else {
+        el.innerText = `--${suffix}`;
+      }
+    }
+  };
+
+  const leads = ['lead1', 'lead2', 'lead3'];
+  leads.forEach((leadKey, idx) => {
+    const num = idx + 1;
+    const lMetrics = result.metrics[leadKey];
+    if (lMetrics) {
+      setMetricText(`q_l${num}_b_raw`, lMetrics.baseline_rms_raw, " mV");
+      setMetricText(`q_l${num}_b_filt`, lMetrics.baseline_rms_filtered, " mV");
+      setMetricText(`q_l${num}_b_red`, lMetrics.baseline_reduction_percent, " %");
+      
+      setMetricText(`q_l${num}_n_raw`, lMetrics.hf_noise_raw);
+      setMetricText(`q_l${num}_n_filt`, lMetrics.hf_noise_filtered);
+      setMetricText(`q_l${num}_n_red`, lMetrics.hf_noise_reduction_percent, " %");
+
+      // Dynamic color coding based on reduction percentage
+      const bRedEl = document.getElementById(`q_l${num}_b_red`);
+      const nRedEl = document.getElementById(`q_l${num}_n_red`);
+      
+      if (bRedEl) {
+        if (lMetrics.baseline_reduction_percent >= 80.0) {
+          bRedEl.style.color = "#34c759"; // Green
+        } else if (lMetrics.baseline_reduction_percent >= 50.0) {
+          bRedEl.style.color = "#ff9f0a"; // Orange
+        } else {
+          bRedEl.style.color = "#ff453a"; // Red
+        }
+      }
+      
+      if (nRedEl) {
+        if (lMetrics.hf_noise_reduction_percent >= 80.0) {
+          nRedEl.style.color = "#34c759";
+        } else if (lMetrics.hf_noise_reduction_percent >= 50.0) {
+          nRedEl.style.color = "#ff9f0a";
+        } else {
+          nRedEl.style.color = "#ff453a";
+        }
+      }
+    }
+  });
+
+  const sumMetrics = result.metrics.summary;
+  if (sumMetrics) {
+    setMetricText("q_sum_b_red", sumMetrics.average_baseline_reduction, " %");
+    setMetricText("q_sum_n_red", sumMetrics.average_noise_reduction, " %");
+    
+    const bSumEl = document.getElementById("q_sum_b_red");
+    const nSumEl = document.getElementById("q_sum_n_red");
+    
+    if (bSumEl) {
+      if (sumMetrics.average_baseline_reduction >= 80.0) {
+        bSumEl.style.color = "#34c759";
+      } else if (sumMetrics.average_baseline_reduction >= 50.0) {
+        bSumEl.style.color = "#ff9f0a";
+      } else {
+        bSumEl.style.color = "#ff453a";
+      }
+    }
+    
+    if (nSumEl) {
+      if (sumMetrics.average_noise_reduction >= 80.0) {
+        nSumEl.style.color = "#34c759";
+      } else if (sumMetrics.average_noise_reduction >= 50.0) {
+        nSumEl.style.color = "#ff9f0a";
+      } else {
+        nSumEl.style.color = "#ff453a";
+      }
+    }
   }
 }
 

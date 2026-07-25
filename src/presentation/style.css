@@ -341,3 +341,117 @@ body {
 .btn-update:active {
   transform: scale(0.98);
 }
+
+/* =========================================================================
+   7. SIGNAL QUALITY METRICS PANEL STYLES
+   ========================================================================= */
+.quality-metrics-panel {
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  width: 100%;
+}
+
+.metrics-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  width: 100%;
+}
+
+.metrics-card {
+  background: #f5f5f7;
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid #e5e5e7;
+  flex: 1 1 calc(25% - 15px); /* Membagi rata 4 kolom pada layar lebar */
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
+.metrics-card.summary-card {
+  background: #eaf3fc;
+  border: 1px solid #b2d6f8;
+  justify-content: flex-start;
+}
+
+.lead-header {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #1d1d1f;
+  border-bottom: 2px solid #d2d2d7;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summary-card .lead-header {
+  color: #0071e3;
+  border-bottom: 2px solid #0071e3;
+}
+
+.metric-section-title {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #86868b;
+  text-transform: uppercase;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 0.85rem;
+  border-bottom: 1px dashed #e5e5e7;
+}
+
+.metric-row:last-child {
+  border-bottom: none;
+}
+
+.metric-lbl {
+  color: #515154;
+}
+
+.metric-val {
+  font-family: monospace;
+  font-weight: bold;
+  color: #1d1d1f;
+}
+
+.reduction-row {
+  background: rgba(0, 0, 0, 0.02);
+  padding: 4px 6px;
+  border-radius: 4px;
+  border-bottom: none;
+  margin-top: 2px;
+}
+
+.reduction-val {
+  color: #0071e3; /* Default Accent */
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+}
+
+.summary-lbl {
+  font-size: 0.8rem;
+  color: #515154;
+  font-weight: 600;
+}
+
+.summary-val {
+  font-size: 1.6rem;
+  font-weight: bold;
+  font-family: monospace;
+  color: #0071e3;
+  margin-top: 4px;
+}
