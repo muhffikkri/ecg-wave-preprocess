@@ -2,17 +2,19 @@
    1. GLOBAL STYLES & LAYOUT BASE (FLEXBOX CORE)
    ========================================================================= */
 :root {
-  --neu-bg: #e7ecf3;
-  --neu-light: #ffffff;
-  --neu-dark: #a8b4c6;
-  --neu-text: #26303d;
-  --neu-muted: #566274;
-  --neu-accent: #1f6fe5;
-  --neu-raw: #d9553f;
-  --neu-clean: #1f6fe5;
-  --shadow-raised: 7px 7px 16px var(--neu-dark), -7px -7px 16px var(--neu-light);
-  --shadow-soft: 4px 4px 10px var(--neu-dark), -4px -4px 10px var(--neu-light);
-  --shadow-inset: inset 4px 4px 9px var(--neu-dark), inset -4px -4px 9px var(--neu-light);
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-well: rgba(255, 255, 255, 0.3);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --glass-line: rgba(120, 135, 160, 0.4);
+  --glass-text: #1f2937;
+  --glass-muted: #566274;
+  --glass-accent: #1f6fe5;
+  --glass-raw: #d9553f;
+  --glass-clean: #1f6fe5;
+  --glass-blur: blur(16px) saturate(160%);
+  --shadow-raised: 0 10px 28px rgba(40, 58, 92, 0.16);
+  --shadow-soft: 0 4px 14px rgba(40, 58, 92, 0.1);
+  --shadow-inset: inset 0 2px 6px rgba(40, 58, 92, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 * {
@@ -23,13 +25,18 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--neu-bg);
-  color: var(--neu-text);
+  /* Latar bergradasi halus: bahan yang di-blur elemen kaca, aksen biru = warna aksen produk */
+  background:
+    radial-gradient(900px 520px at 12% -10%, rgba(31, 111, 229, 0.16), transparent 60%),
+    radial-gradient(820px 620px at 108% 25%, rgba(217, 85, 63, 0.1), transparent 55%),
+    linear-gradient(160deg, #eef2f8 0%, #dde6f2 55%, #e9edf5 100%);
+  background-attachment: fixed;
+  color: var(--glass-text);
   padding: 20px;
 }
 
 :focus-visible {
-  outline: 2px solid var(--neu-accent);
+  outline: 2px solid var(--glass-accent);
   outline-offset: 2px;
 }
 
@@ -44,7 +51,7 @@ body {
    2. HEADER & CONTROL PANEL PANELS (FLEXBOX CONTAINER)
    ========================================================================= */
 .header-panel {
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   padding: 22px;
   border-radius: 18px;
   box-shadow: var(--shadow-raised);
@@ -56,7 +63,7 @@ body {
 }
 
 .config-container {
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   padding: 22px;
   border-radius: 18px;
   box-shadow: var(--shadow-raised);
@@ -81,7 +88,7 @@ body {
 .control-group label {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
 }
 
 .control-group select,
@@ -90,10 +97,10 @@ body {
   padding: 11px 12px;
   border: none;
   border-radius: 12px;
-  background: var(--neu-bg);
+  background: var(--glass-well);
   box-shadow: var(--shadow-inset);
   font-size: 0.95rem;
-  color: var(--neu-text);
+  color: var(--glass-text);
   outline: none;
   transition: box-shadow 0.2s;
   width: 100%;
@@ -101,24 +108,24 @@ body {
 
 .control-group select:focus,
 .control-group input:focus {
-  box-shadow: var(--shadow-inset), inset 0 0 0 2px var(--neu-accent);
+  box-shadow: var(--shadow-inset), inset 0 0 0 2px var(--glass-accent);
 }
 
 .control-group input[type="range"] {
   width: 100%;
   margin-top: 8px;
-  accent-color: var(--neu-accent);
+  accent-color: var(--glass-accent);
 }
 
 /* Label Dinamis di Sebelah Slider */
 .slider-val {
   font-family: monospace;
   font-weight: bold;
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   box-shadow: var(--shadow-inset);
   padding: 3px 8px;
   border-radius: 8px;
-  color: var(--neu-accent);
+  color: var(--glass-accent);
   margin-left: 5px;
   font-size: 0.85rem;
 }
@@ -129,7 +136,7 @@ body {
 .grid-canvas {
   display: flex;
   flex-direction: column;
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   padding: 22px;
   border-radius: 18px;
   box-shadow: var(--shadow-raised);
@@ -143,7 +150,7 @@ body {
   gap: 14px;
   flex-wrap: wrap;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--neu-dark);
+  border-bottom: 1px solid var(--glass-line);
 }
 
 .toggle-signal {
@@ -153,11 +160,11 @@ body {
   font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
   cursor: pointer;
   padding: 8px 14px;
   border-radius: 12px;
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   box-shadow: var(--shadow-soft);
   user-select: none;
 }
@@ -166,25 +173,25 @@ body {
   width: 16px;
   height: 16px;
   cursor: pointer;
-  accent-color: var(--neu-muted);
+  accent-color: var(--glass-muted);
 }
 
 .toggle-signal.raw input {
-  accent-color: var(--neu-raw);
+  accent-color: var(--glass-raw);
 }
 
 .toggle-signal.clean input {
-  accent-color: var(--neu-clean);
+  accent-color: var(--glass-clean);
 }
 
 .toggle-signal:has(input:checked) {
   box-shadow: var(--shadow-inset);
-  color: var(--neu-text);
+  color: var(--glass-text);
 }
 
 .toolbar-hint {
   font-size: 0.78rem;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
   margin-left: auto;
 }
 
@@ -192,8 +199,8 @@ body {
   font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: var(--neu-text);
-  background: var(--neu-bg);
+  color: var(--glass-text);
+  background: var(--glass-bg);
   border: none;
   border-radius: 12px;
   padding: 9px 16px;
@@ -209,8 +216,8 @@ body {
 .lead-label {
   font-size: 0.9rem;
   font-weight: bold;
-  color: var(--neu-text);
-  background: var(--neu-bg);
+  color: var(--glass-text);
+  background: var(--glass-bg);
   box-shadow: var(--shadow-inset);
   padding: 9px 14px;
   border-radius: 12px;
@@ -220,7 +227,7 @@ body {
 .chart-container {
   position: relative;
   height: 320px;
-  background: var(--neu-bg);
+  background: var(--glass-well);
   box-shadow: var(--shadow-inset);
   border-radius: 14px;
   overflow: hidden;
@@ -238,7 +245,7 @@ body {
 
 /* Kardus Metrik Atas (Row 1): Otomatis membagi ruang menjadi 5 bagian seimbang */
 .holter-card {
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   padding: 16px;
   border-radius: 16px;
   box-shadow: var(--shadow-raised);
@@ -261,7 +268,7 @@ body {
 .metric-title {
   font-size: 0.8rem;
   font-weight: bold;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
@@ -271,7 +278,7 @@ body {
 .holter-val {
   font-size: 1.8rem;
   font-weight: bold;
-  color: var(--neu-text);
+  color: var(--glass-text);
   font-family: monospace;
   margin-top: 5px;
   text-align: left;
@@ -279,7 +286,7 @@ body {
 
 .holter-unit {
   font-size: 0.9rem;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
   font-family: -apple-system, sans-serif;
   font-weight: normal;
 }
@@ -299,7 +306,7 @@ body {
   flex-direction: column;
   gap: 8px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--neu-dark);
+  border-bottom: 1px solid var(--glass-line);
   width: 100%;
 }
 
@@ -315,7 +322,7 @@ body {
 .inference-label {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
   min-width: 240px;
 }
 
@@ -355,16 +362,16 @@ body {
 .conf-text {
   font-family: monospace;
   font-weight: bold;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
   font-size: 0.95rem;
 }
 
 /* Badges Dinamis untuk Event Sinyal */
 .event-tag {
   display: inline-block;
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   box-shadow: var(--shadow-inset);
-  color: var(--neu-text);
+  color: var(--glass-text);
   font-size: 0.85rem;
   font-weight: 600;
   padding: 5px 11px;
@@ -378,7 +385,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: var(--neu-bg);
+  background: var(--glass-well);
   box-shadow: var(--shadow-inset);
   padding: 12px 15px;
   border-radius: 14px;
@@ -389,16 +396,16 @@ body {
   font-size: 0.85rem;
   font-family: monospace;
   font-weight: bold;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
 }
 
 .metric-item span {
-  color: var(--neu-accent);
+  color: var(--glass-accent);
 }
 
 .btn-update {
-  background: var(--neu-bg);
-  color: var(--neu-accent);
+  background: var(--glass-bg);
+  color: var(--glass-accent);
   border: none;
   padding: 13px 20px;
   font-size: 0.95rem;
@@ -441,8 +448,8 @@ body {
 
 .tab-btn {
   padding: 12px 22px;
-  background: var(--neu-bg);
-  color: var(--neu-muted);
+  background: var(--glass-bg);
+  color: var(--glass-muted);
   border: none;
   border-radius: 14px;
   font-weight: bold;
@@ -453,12 +460,12 @@ body {
 }
 
 .tab-btn.active {
-  color: var(--neu-accent);
+  color: var(--glass-accent);
   box-shadow: var(--shadow-inset);
 }
 
-.neu-panel {
-  background: var(--neu-bg);
+.glass-panel {
+  background: var(--glass-bg);
   padding: 18px;
   border-radius: 18px;
   box-shadow: var(--shadow-raised);
@@ -468,7 +475,7 @@ body {
    7. SIGNAL QUALITY METRICS PANEL STYLES
    ========================================================================= */
 .quality-metrics-panel {
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   padding: 22px;
   border-radius: 18px;
   box-shadow: var(--shadow-raised);
@@ -483,7 +490,7 @@ body {
 }
 
 .metrics-card {
-  background: var(--neu-bg);
+  background: var(--glass-bg);
   padding: 16px;
   border-radius: 16px;
   box-shadow: var(--shadow-inset);
@@ -494,16 +501,16 @@ body {
 }
 
 .metrics-card.summary-card {
-  background: var(--neu-bg);
-  box-shadow: var(--shadow-inset), inset 0 0 0 2px var(--neu-accent);
+  background: var(--glass-bg);
+  box-shadow: var(--shadow-inset), inset 0 0 0 2px var(--glass-accent);
   justify-content: flex-start;
 }
 
 .lead-header {
   font-size: 0.9rem;
   font-weight: bold;
-  color: var(--neu-text);
-  border-bottom: 2px solid var(--neu-dark);
+  color: var(--glass-text);
+  border-bottom: 2px solid var(--glass-line);
   padding-bottom: 6px;
   margin-bottom: 10px;
   text-transform: uppercase;
@@ -511,14 +518,14 @@ body {
 }
 
 .summary-card .lead-header {
-  color: var(--neu-accent);
-  border-bottom: 2px solid var(--neu-accent);
+  color: var(--glass-accent);
+  border-bottom: 2px solid var(--glass-accent);
 }
 
 .metric-section-title {
   font-size: 0.75rem;
   font-weight: bold;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
   text-transform: uppercase;
   margin-top: 8px;
   margin-bottom: 4px;
@@ -529,7 +536,7 @@ body {
   justify-content: space-between;
   padding: 3px 0;
   font-size: 0.85rem;
-  border-bottom: 1px dashed var(--neu-dark);
+  border-bottom: 1px dashed var(--glass-line);
 }
 
 .metric-row:last-child {
@@ -537,13 +544,13 @@ body {
 }
 
 .metric-lbl {
-  color: var(--neu-muted);
+  color: var(--glass-muted);
 }
 
 .metric-val {
   font-family: monospace;
   font-weight: bold;
-  color: var(--neu-text);
+  color: var(--glass-text);
 }
 
 .reduction-row {
@@ -555,7 +562,7 @@ body {
 }
 
 .reduction-val {
-  color: var(--neu-accent); /* Default Accent */
+  color: var(--glass-accent); /* Default Accent */
 }
 
 .summary-item {
@@ -566,7 +573,7 @@ body {
 
 .summary-lbl {
   font-size: 0.8rem;
-  color: var(--neu-muted);
+  color: var(--glass-muted);
   font-weight: 600;
 }
 
@@ -574,6 +581,34 @@ body {
   font-size: 1.6rem;
   font-weight: bold;
   font-family: monospace;
-  color: var(--neu-accent);
+  color: var(--glass-accent);
   margin-top: 4px;
+}
+
+/* =========================================================================
+   8. GLASS TREATMENT (frosted blur + tepi cahaya di semua permukaan kaca)
+   Dosis penuh sesuai permintaan pemilik (override R-10, dicatat di sesi ini)
+   ========================================================================= */
+.header-panel,
+.config-container,
+.grid-canvas,
+.holter-card,
+.quality-metrics-panel,
+.metrics-card,
+.glass-panel,
+.tab-btn,
+.toggle-signal,
+.btn-tool,
+.btn-update,
+.event-tag,
+.lead-label,
+.slider-val,
+.hardware-metrics,
+.chart-container,
+.control-group select,
+.control-group input[type="number"],
+.control-group input[type="text"] {
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
 }
