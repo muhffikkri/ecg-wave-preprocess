@@ -52,10 +52,13 @@ const ecgGridPlugin = {
   },
 };
 Chart.register(ecgGridPlugin);
+if (window.ChartZoom) Chart.register(window.ChartZoom);
 
 // =========================================================================
-// 3. CHART INITIALIZATION
+// 3. CHART INITIALIZATION (ONE CHART PER LEAD, RAW + FILTERED OVERLAY)
 // =========================================================================
+const SIGNAL_COLORS = { raw: "#d9553f", clean: "#1f6fe5" };
+
 function initChart(canvasId) {
   const canvasEl = document.getElementById(canvasId);
   if (!canvasEl) return null;
@@ -65,25 +68,52 @@ function initChart(canvasId) {
     type: "line",
     data: {
       labels: [],
-      datasets: [{ data: [], borderColor: "#1c1c1e", borderWidth: 1.5, pointRadius: 0, fill: false }],
+      datasets: [
+        { label: "Raw", data: [], borderColor: SIGNAL_COLORS.raw, borderWidth: 1.2, pointRadius: 0, fill: false },
+        { label: "Filtered", data: [], borderColor: SIGNAL_COLORS.clean, borderWidth: 1.8, pointRadius: 0, fill: false },
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
       scales: {
         x: { display: false },
-        y: { border: { display: false }, grid: { display: false }, ticks: { color: "#1d1d1f", font: { size: 9, family: "monospace" } } },
+        y: { border: { display: false }, grid: { display: false }, ticks: { color: "#2b3440", font: { size: 9, family: "monospace" } } },
       },
-      plugins: { legend: { display: false } },
+      plugins: {
+        legend: { display: false },
+        zoom: {
+          pan: { enabled: true, mode: "x" },
+          zoom: { wheel: { enabled: true, mode: "x" }, pinch: { enabled: true, mode: "x" }, dblclick: { mode: "x" }, mode: "x" },
+          limits: {
+            x: { min: "original", max: "original" },
+            y: { min: "original", max: "original" },
+          },
+        },
+      },
     },
   });
 }
 
 function initializeCharts() {
   for (let i = 0; i < LEAD_COUNT; i++) {
-    charts[`raw_${i}`] = initChart(`raw_lead_${i}`);
-    charts[`clean_${i}`] = initChart(`clean_lead_${i}`);
+    charts[i] = initChart(`lead_chart_${i}`);
   }
+}
+
+function toggleSignal(which, visible) {
+  const idx = which === "raw" ? 0 : 1;
+  Object.values(charts).forEach((c) => {
+    if (c) {
+      c.setDatasetVisibility(idx, visible);
+      c.update();
+    }
+  });
+}
+
+function resetZoomAll() {
+  Object.values(charts).forEach((c) => c && c.resetZoom());
 }
 
 // =========================================================================
@@ -109,14 +139,6 @@ function hide(id) {
   if (el) el.style.display = "none";
 }
 
-function setButtonStyle(id, background, color) {
-  const btn = document.getElementById(id);
-  if (btn) {
-    btn.style.background = background;
-    btn.style.color = color;
-  }
-}
-
 // =========================================================================
 // 5. TAB NAVIGATION
 // =========================================================================
@@ -124,15 +146,13 @@ function switchTab(tabId) {
   if (tabId === 1) {
     show("view_tab_1", "flex");
     hide("view_tab_2");
-    setButtonStyle("tab_btn_1", "#0071e3", "white");
-    setButtonStyle("tab_btn_2", "#e5e5e7", "#1d1d1f");
   } else {
     hide("view_tab_1");
     show("view_tab_2", "flex");
-    setButtonStyle("tab_btn_1", "#e5e5e7", "#1d1d1f");
-    setButtonStyle("tab_btn_2", "#0071e3", "white");
     loadSimulatorFolders();
   }
+  document.getElementById("tab_btn_1")?.classList.toggle("active", tabId === 1);
+  document.getElementById("tab_btn_2")?.classList.toggle("active", tabId === 2);
 }
 
 // =========================================================================
@@ -344,6 +364,49 @@ async function saveFilteredCSV() {
 }
 
 // =========================================================================
+// 7.2. CONVERT TO JSONL FUNCTION
+// =========================================================================
+async function convertToJSONL() {
+  const getVal = (id) => document.getElementById(id)?.value || "";
+  const d = getVal("dataset");
+  const r = getVal("record_id");
+  if (!r) {
+    alert("Silakan pilih Record ID terlebih dahulu.");
+    return;
+  }
+
+  const t_fs = getVal("target_fs");
+  const wav = getVal("wavelet");
+  const lvl = getVal("w_level");
+  const med = getVal("median_kernel");
+  const low = getVal("lowcut");
+  const high = getVal("highcut");
+  const model_id = getVal("model_id");
+
+  const convertBtn = document.getElementById("btn_convert_jsonl");
+  const origText = convertBtn ? convertBtn.innerText : "CONVERT TO JSONL";
+  if (convertBtn) convertBtn.innerText = "CONVERTING...";
+
+  try {
+    const downloadUrl = `${API_BASE}/api/convert_to_jsonl?dataset=${d}&record_id=${r}&target_fs=${t_fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}&model_id=${model_id}`;
+    
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `${r}.jsonl`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    alert(`✅ Berhasil! File ${r}.jsonl telah berhasil dikonversi dan diunduh.`);
+  } catch (err) {
+    console.error("Gagal melakukan konversi JSONL:", err);
+    alert("Terjadi kesalahan koneksi saat konversi JSONL: " + err.message);
+  } finally {
+    if (convertBtn) convertBtn.innerText = origText;
+  }
+}
+
+// =========================================================================
 // 8. DATA RENDERING FUNCTIONS (TAB 1)
 // =========================================================================
 function renderDiagnosis(result) {
@@ -400,7 +463,7 @@ function renderEvents(events) {
       span.className = "event-tag";
       if (evt.includes("⚠️")) {
         span.style.background = "#ffe5e5";
-        span.style.color = "#ff453a";
+        span.style.color = "#c0392b";
       }
       span.innerText = evt;
       eventDiv.appendChild(span);
@@ -412,11 +475,16 @@ function renderEvents(events) {
 
 function renderCharts(result) {
   for (let i = 0; i < LEAD_COUNT; i++) {
-    const rawData = result.raw_signals ? result.raw_signals[`lead_${i}`] : null;
-    const cleanData = result.clean_signals ? result.clean_signals[`lead_${i}`] : null;
+    const chart = charts[i];
+    if (!chart) continue;
 
-    updateChartData(charts[`raw_${i}`], rawData);
-    updateChartData(charts[`clean_${i}`], cleanData);
+    const rawData = result.raw_signals ? result.raw_signals[`lead_${i}`] || [] : [];
+    const cleanData = result.clean_signals ? result.clean_signals[`lead_${i}`] || [] : [];
+
+    chart.data.labels = Array.from({ length: Math.max(rawData.length, cleanData.length) }, (_, idx) => idx);
+    chart.data.datasets[0].data = rawData;
+    chart.data.datasets[1].data = cleanData;
+    chart.update("none");
   }
 }
 
@@ -453,21 +521,21 @@ function renderSignalQualityMetrics(result) {
       
       if (bRedEl) {
         if (lMetrics.baseline_reduction_percent >= 80.0) {
-          bRedEl.style.color = "#34c759"; // Green
+          bRedEl.style.color = "#1f9d4d"; // Green
         } else if (lMetrics.baseline_reduction_percent >= 50.0) {
-          bRedEl.style.color = "#ff9f0a"; // Orange
+          bRedEl.style.color = "#b26a00"; // Orange
         } else {
-          bRedEl.style.color = "#ff453a"; // Red
+          bRedEl.style.color = "#d92d20"; // Red
         }
       }
-      
+
       if (nRedEl) {
         if (lMetrics.hf_noise_reduction_percent >= 80.0) {
-          nRedEl.style.color = "#34c759";
+          nRedEl.style.color = "#1f9d4d";
         } else if (lMetrics.hf_noise_reduction_percent >= 50.0) {
-          nRedEl.style.color = "#ff9f0a";
+          nRedEl.style.color = "#b26a00";
         } else {
-          nRedEl.style.color = "#ff453a";
+          nRedEl.style.color = "#d92d20";
         }
       }
     }
@@ -483,21 +551,21 @@ function renderSignalQualityMetrics(result) {
     
     if (bSumEl) {
       if (sumMetrics.average_baseline_reduction >= 80.0) {
-        bSumEl.style.color = "#34c759";
+        bSumEl.style.color = "#1f9d4d";
       } else if (sumMetrics.average_baseline_reduction >= 50.0) {
-        bSumEl.style.color = "#ff9f0a";
+        bSumEl.style.color = "#b26a00";
       } else {
-        bSumEl.style.color = "#ff453a";
+        bSumEl.style.color = "#d92d20";
       }
     }
-    
+
     if (nSumEl) {
       if (sumMetrics.average_noise_reduction >= 80.0) {
-        nSumEl.style.color = "#34c759";
+        nSumEl.style.color = "#1f9d4d";
       } else if (sumMetrics.average_noise_reduction >= 50.0) {
-        nSumEl.style.color = "#ff9f0a";
+        nSumEl.style.color = "#b26a00";
       } else {
-        nSumEl.style.color = "#ff453a";
+        nSumEl.style.color = "#d92d20";
       }
     }
   }
@@ -590,16 +658,16 @@ function renderRecommendation(result) {
 
   if (bpm < 65.0 && atten > 4.0) {
     recCard.style.background = "#fff2e6";
-    recCard.style.color = "#ff9f0a";
-    recCard.style.borderLeft = "5px solid #ff9f0a";
+    recCard.style.color = "#8a5200";
+    recCard.style.borderLeft = "5px solid #b26a00";
     setHTML(
       "sim_recommendation_text",
       `⚠️ <b>Rekomendasi Deteksi Bradikardia:</b> Sinyal terdeteksi sebagai Denyut Jantung Lambat (${result.calculated_bpm} BPM) dan filter median mereduksi amplitudo puncak R sebesar ${result.attenuation_median_pct}%. Filter terlalu agresif memotong fase isoelektrik. <br><b>Saran Tindakan:</b> Ubah parameter Median Filter Kernel di Tab 1 menjadi 101 atau 151 sampel sebelum grid search massal dilakukan.`,
     );
   } else {
     recCard.style.background = "#e6f9ed";
-    recCard.style.color = "#34c759";
-    recCard.style.borderLeft = "5px solid #34c759";
+    recCard.style.color = "#1a7f42";
+    recCard.style.borderLeft = "5px solid #1f9d4d";
     setHTML(
       "sim_recommendation_text",
       `✅ <b>Status Filter Stabil:</b> Redaman amplitudo puncak r-wave berada pada rentang batas aman (${result.attenuation_median_pct}%). Segmentasi morfologi dan interval waktu spasio-temporal EKG lulus uji distorsi klinis AHA.`,
@@ -608,17 +676,7 @@ function renderRecommendation(result) {
 }
 
 // =========================================================================
-// 10. UTILITY FUNCTIONS
-// =========================================================================
-function updateChartData(chartInstance, dataArray) {
-  if (!chartInstance || !dataArray || dataArray.length === 0) return;
-  chartInstance.data.labels = Array.from({ length: dataArray.length }, (_, idx) => idx);
-  chartInstance.data.datasets[0].data = dataArray;
-  chartInstance.update("none"); // Mencegah pemborosan resource rendering animasi berlebih
-}
-
-// =========================================================================
-// 11. STARTUP / APPLICATION ENTRY POINT
+// 10. STARTUP / APPLICATION ENTRY POINT
 // =========================================================================
 window.onload = async () => {
   initializeCharts();
