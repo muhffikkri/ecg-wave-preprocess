@@ -345,45 +345,53 @@ def run_dsp_distortion_analysis(
     start = 250
     end = min(1000, len(gt_signal))
 
-    axes[2].plot(
-        time_axis[start:end],
-        gt_signal[start:end],
-        label="Ground Truth",
-        linewidth=2.5,
-        color="#34c759",
+    psd_cover = min(40.0, nyq)
+
+    axes[2].fill_between(
+        freqs_w,
+        psd,
+        color="#0071e3",
+        alpha=0.5,
+        linewidth=0,
     )
 
     axes[2].plot(
-        time_axis[start:end],
-        causal_signal[start:end],
-        "--",
-        color="#ff3b30",
-        label=f"Causal ({results['attenuation_butt_pct']}%)",
+        freqs_w,
+        psd,
+        color="#0071e3",
+        linewidth=1.0,
     )
 
-    axes[2].plot(
-        time_axis[start:end],
-        zero_phase_signal[start:end],
-        ":",
-        color="#5856d6",
-        linewidth=2,
-        label="Zero-phase",
+    for band_lo, band_hi, band_color in (
+        (0.5, 5.0, "#34c759"),
+        (5.0, 15.0, "#ff9500"),
+        (15.0, min(40.0, nyq), "#5856d6"),
+    ):
+        if band_hi > band_lo:
+            axes[2].axvspan(
+                band_lo,
+                band_hi,
+                color=band_color,
+                alpha=0.12,
+            )
+
+    axes[2].axvline(
+        dominant_hz,
+        color="#d92d20",
+        linestyle="--",
+        linewidth=1.2,
+        alpha=0.9,
     )
 
-    axes[2].plot(
-        time_axis[start:end],
-        median_filtered[start:end],
-        color="#ff9500",
-        alpha=0.7,
-        label=f"Median ({results['attenuation_median_pct']}%)",
+    axes[2].set_xlim(0, psd_cover)
+    axes[2].set_title(
+        f"Power Spectral Density - dominant {results['spectral_dominant_hz']} Hz",
+        fontweight="bold",
     )
 
     axes[2].grid(True, linestyle=":")
-    axes[2].legend()
-    axes[2].set_title(
-        "Filter Distortion Comparison",
-        fontweight="bold",
-    )
+    axes[2].set_xlabel("Frequency (Hz)")
+    axes[2].set_ylabel("PSD (mV^2/Hz)")
 
     plt.tight_layout()
 
@@ -407,6 +415,21 @@ def run_dsp_distortion_analysis(
 
     # ============================================================
 
+    distortion = {
+        "time": [round(float(t), 4) for t in time_axis[start:end]],
+        "ground_truth": [round(float(v), 4) for v in gt_signal[start:end]],
+        "causal": [round(float(v), 4) for v in causal_signal[start:end]],
+        "zero_phase": [round(float(v), 4) for v in zero_phase_signal[start:end]],
+        "median": [round(float(v), 4) for v in median_filtered[start:end]],
+        "labels": {
+            "ground_truth": "Ground Truth",
+            "causal": f"Causal ({results['attenuation_butt_pct']}%)",
+            "zero_phase": "Zero-phase",
+            "median": f"Median ({results['attenuation_median_pct']}%)",
+        },
+    }
+
+    results["distortion"] = distortion
     results["lead"] = lead + 1
     results["lead_label"] = f"LEAD {lead + 1}"
     results["fs_used"] = float(fs)

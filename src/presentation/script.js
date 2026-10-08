@@ -749,6 +749,7 @@ async function triggerSimulatorAnalysis() {
 
   setText("sim_placeholder_text", "Sedang menghitung transformasi Fourier (FFT) dan melacak koordinat puncak R... Mohon tunggu.");
   hide("sim_report_img");
+  hide("sim_distortion_wrap");
 
   try {
     const lead = getVal("sim_lead") || "0";
@@ -770,6 +771,7 @@ async function triggerSimulatorAnalysis() {
 
       renderSimulatorMetrics(result);
       renderSimulatorImage(result.image);
+      renderDistortionChart(result);
       renderRecommendation(result);
     } else {
       alert(result.message);
@@ -797,6 +799,70 @@ function renderSimulatorImage(base64Image) {
     imgNode.src = "data:image/png;base64," + base64Image;
     show("sim_report_img");
   }
+}
+
+let simDistChart = null;
+
+function renderDistortionChart(result) {
+  const wrap = document.getElementById("sim_distortion_wrap");
+  const canvas = document.getElementById("sim_distortion_chart");
+  const dist = result.distortion;
+  if (!wrap || !canvas || !dist) return;
+
+  if (simDistChart) {
+    simDistChart.destroy();
+    simDistChart = null;
+  }
+
+  show("sim_distortion_wrap");
+
+  const series = [
+    { key: "ground_truth", color: "#34c759", width: 2.2, dash: [] },
+    { key: "causal", color: "#ff3b30", width: 1.5, dash: [6, 4] },
+    { key: "zero_phase", color: "#5856d6", width: 1.5, dash: [2, 2] },
+    { key: "median", color: "#ff9500", width: 1.5, dash: [] },
+  ];
+
+  const datasets = series.map((s) => ({
+    label: (dist.labels && dist.labels[s.key]) || s.key,
+    data: dist[s.key].map((y, i) => ({ x: dist.time[i], y })),
+    borderColor: s.color,
+    borderWidth: s.width,
+    borderDash: s.dash,
+    pointRadius: 0,
+    fill: false,
+    tension: 0,
+  }));
+
+  simDistChart = new Chart(canvas.getContext("2d"), {
+    type: "line",
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          type: "linear",
+          ticks: { color: "#8e8e93" },
+          grid: { color: "rgba(255,255,255,0.08)" },
+          title: { display: true, text: "Time (s)", color: "#8e8e93" },
+        },
+        y: {
+          title: { display: true, text: "Amplitude (mV)", color: "#8e8e93" },
+          grid: { color: "rgba(255,255,255,0.08)" },
+        },
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: "bottom",
+          labels: { color: "#d1d4db", boxWidth: 24 },
+        },
+        tooltip: { mode: "nearest", intersect: false },
+      },
+    },
+  });
 }
 
 function renderRecommendation(result) {

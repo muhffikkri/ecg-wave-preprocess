@@ -495,6 +495,14 @@
       </div>
     </div>
 
+    <div id="sim_distortion_wrap" class="glass-panel" style="margin-top: 20px; display: none">
+      <div class="metric-title">FILTER DISTORTION COMPARISON</div>
+      <div style="margin: 4px 0 10px; font-size: 0.85rem; color: #566274">Klik label legenda untuk menampilkan / menyembunyikan sinyal.</div>
+      <div class="chart-container" style="height: 300px; border-radius: 10px; overflow: hidden">
+        <canvas id="sim_distortion_chart"></canvas>
+      </div>
+    </div>
+
     <div class="glass-panel" style="text-align: center; margin-top: 20px">
       <img id="sim_report_img" style="width: 100%; display: none; border-radius: 8px" />
       <div id="sim_placeholder_text" style="padding: 100px; color: #566274; font-weight: bold">Silakan pilih folder
@@ -503,7 +511,7 @@
   </div>
 
   <!-- JavaScript Path Terintegrasi FastAPI -->
-  <script src="/static/script.js?v=1.5.0"></script>
+  <script src="/static/script.js?v=1.6.0"></script>
 </body>
 
 </html>
