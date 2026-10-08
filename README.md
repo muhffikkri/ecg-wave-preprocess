@@ -48,6 +48,18 @@ Backend memiliki mesin inferensi model deep learning `.keras` **Multi-Label Clas
 
 ---
 
+## 📸 Tangkapan Layar
+
+### Tab 1 — Live Dataset & Hardware Streaming Workbench
+
+![Tab 1 - Live Dataset & Hardware Streaming Workbench](screenshots/tab1.png)
+
+### Tab 2 — ProSim Hardware DSP Study
+
+![Tab 2 - ProSim Hardware DSP Study](screenshots/tab2.png)
+
+---
+
 ## 📁 Struktur Repositori Proyek
 
 ```text
@@ -77,6 +89,7 @@ ecg-wave-preproccess/
 │       ├── script.js         # Logika frontend interaktif
 │       └── style.css         # Gaya visual (glassmorphism)
 ├── venv/                     # Python Virtual Environment
+├── screenshots/              # Tangkapan layar tampilan web
 ├── README.md
 └── CHANGELOG.md
 ```
