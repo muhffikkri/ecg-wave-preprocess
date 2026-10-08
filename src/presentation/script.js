@@ -701,25 +701,45 @@ function renderSignalQualityMetrics(result) {
 // 9. SIMULATOR HARDWARE DSP API & RENDERING (TAB 2)
 // =========================================================================
 async function loadSimulatorFolders() {
-  setText("sim_placeholder_text", "Loading daftar rekaman dari hardware simulator...");
+  setText("sim_placeholder_text", "Loading daftar folder dataset & simulator...");
   try {
     const res = await fetch(`${API_BASE}/api/simulator/folders`);
-    const folders = await res.json();
+    const groups = await res.json();
     const selectNode = document.getElementById("sim_folder_select");
     if (!selectNode) return;
 
+    const labels = {
+      prosim_simulator: "ProSim Simulator (ADC)",
+      ptbxl_100hz: "PTB-XL (100Hz)",
+      ptbxl_500hz: "PTB-XL (500Hz)",
+      chapman: "Chapman",
+    };
+
     selectNode.innerHTML = "";
-    folders.forEach((f) => {
-      let opt = document.createElement("option");
-      opt.value = f;
-      opt.innerText = f;
-      selectNode.appendChild(opt);
+    groups.forEach((g) => {
+      const og = document.createElement("optgroup");
+      og.label = labels[g.dataset] || g.dataset;
+      g.records.forEach((r) => {
+        const opt = document.createElement("option");
+        opt.value = `${g.dataset}::${r}`;
+        opt.innerText = r;
+        og.appendChild(opt);
+      });
+      selectNode.appendChild(og);
     });
+    onSimulatorSourceChange();
     setText("sim_placeholder_text", "Silakan pilih folder rekaman kemudian jalankan analisis.");
   } catch (err) {
     console.error("Gagal memuat folder simulator:", err);
     setText("sim_placeholder_text", "Gagal memuat folder: Periksa koneksi backend Hardware API.");
   }
+}
+
+// Entri dataset bukan file ADC — default-kan opsi "sudah calibrated"
+function onSimulatorSourceChange() {
+  const src = document.getElementById("sim_folder_select")?.value || "";
+  const cb = document.getElementById("sim_already_calibrated");
+  if (cb) cb.checked = !src.startsWith("prosim_simulator::");
 }
 
 async function triggerSimulatorAnalysis() {
@@ -731,6 +751,8 @@ async function triggerSimulatorAnalysis() {
   hide("sim_report_img");
 
   try {
+    const lead = getVal("sim_lead") || "0";
+    const calibrated = document.getElementById("sim_already_calibrated")?.checked ? "true" : "false";
     const fs = getVal("sim_fs");
     const wav = getVal("sim_wavelet");
     const lvl = getVal("sim_w_level");
@@ -738,7 +760,7 @@ async function triggerSimulatorAnalysis() {
     const low = getVal("sim_lowcut");
     const high = getVal("sim_highcut");
 
-    const url = `${API_BASE}/api/simulator/analyze?folder_name=${folder}&target_fs=${fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}`;
+    const url = `${API_BASE}/api/simulator/analyze?source=${encodeURIComponent(folder)}&lead=${lead}&already_calibrated=${calibrated}&target_fs=${fs}&wavelet=${wav}&w_level=${lvl}&median_kernel=${med}&lowcut=${low}&highcut=${high}`;
     const res = await fetch(url);
     const result = await res.json();
 
@@ -764,6 +786,9 @@ function renderSimulatorMetrics(result) {
   setHTML("sim_val_rr", `${result.avg_rr_seconds}<span class="holter-unit"> detik</span>`);
   setHTML("sim_val_noise", `${result.dominant_noise_freq}<span class="holter-unit"> Hz</span>`);
   setHTML("sim_val_attenuation", `${result.attenuation_median_pct}<span class="holter-unit"> %</span>`);
+  setHTML("sim_val_spectral", `${result.spectral_dominant_hz ?? "--"}<span class="holter-unit"> Hz</span>`);
+  setText("sim_val_spectral_sub", result.spectral_bands_pct || "");
+  setText("sim_lead_label", result.lead_label || "LEAD 1");
 }
 
 function renderSimulatorImage(base64Image) {

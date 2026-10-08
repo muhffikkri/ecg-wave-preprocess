@@ -14,8 +14,11 @@ from scipy import signal
 
 
 def run_dsp_distortion_analysis(
-    folder_path,
+    folder_path=None,
+    signal_mv=None,
     fs=250.0,
+    lead=0,
+    already_calibrated=False,
     p_wavelet="db4",
     p_w_level=4,
     p_median_kernel=51,
@@ -25,53 +28,85 @@ def run_dsp_distortion_analysis(
     """
     Analisis kualitas sinyal hasil akuisisi ADS1293.
 
+    Dua mode:
+      - ADC (default): membandingkan raw_ecg.csv vs CSV hasil kalibrasi.
+      - Calibrated (already_calibrated=True): signal_mv sudah dalam mV
+        (contoh: entri dataset) — rekalkulasi kalibrasi dilewati.
+
     Menghasilkan:
         - Heart Rate
         - RR Interval
         - Dominant Noise Frequency
         - Peak Attenuation
+        - Spectral Analysis (Welch PSD)
         - Visual comparison plot (Base64)
     """
 
-    raw_path = os.path.join(
-        folder_path,
-        "data",
-        "raw_ecg.csv",
-    )
-
-    calibrated_path = os.path.join(
-        folder_path,
-        "data",
-        "calibrated",
-        "latest_prosim_calibrated_mv.csv",
-    )
-
-    if not os.path.exists(raw_path):
-        return {
-            "status": "error",
-            "message": f"File tidak ditemukan:\n{raw_path}",
-        }
-
-    if not os.path.exists(calibrated_path):
-        return {
-            "status": "error",
-            "message": f"File tidak ditemukan:\n{calibrated_path}",
-        }
+    lead = max(0, int(lead))
+    col = f"ch{lead + 1}"
+    results = {}
 
     # ============================================================
     # LOAD DATA
     # ============================================================
-    df_raw = pd.read_csv(raw_path)
-    df_cal = pd.read_csv(calibrated_path)
-    raw_signal = df_raw["ch1"].to_numpy(dtype=float)
-    gt_signal = df_cal["ch1"].to_numpy(dtype=float)
-
-    if "time" in df_raw.columns:
-        time_axis = df_raw["time"].to_numpy(dtype=float)
+    if already_calibrated:
+        if signal_mv is None:
+            calibrated_path = os.path.join(
+                folder_path or "",
+                "data",
+                "calibrated",
+                "latest_prosim_calibrated_mv.csv",
+            )
+            if not folder_path or not os.path.exists(calibrated_path):
+                return {
+                    "status": "error",
+                    "message": f"File tidak ditemukan:\n{calibrated_path}",
+                }
+            df_cal = pd.read_csv(calibrated_path)
+            gt_signal = df_cal[col if col in df_cal.columns else "ch1"].to_numpy(dtype=float)
+            if "time" in df_cal.columns:
+                time_axis = df_cal["time"].to_numpy(dtype=float)
+            else:
+                time_axis = np.arange(len(gt_signal)) / float(fs)
+        else:
+            gt_signal = np.asarray(signal_mv, dtype=float)
+            time_axis = np.arange(len(gt_signal)) / float(fs)
+        raw_signal = None
     else:
-        time_axis = np.arange(len(raw_signal)) / float(fs)
+        raw_path = os.path.join(
+            folder_path,
+            "data",
+            "raw_ecg.csv",
+        )
 
-    results = {}
+        calibrated_path = os.path.join(
+            folder_path,
+            "data",
+            "calibrated",
+            "latest_prosim_calibrated_mv.csv",
+        )
+
+        if not os.path.exists(raw_path):
+            return {
+                "status": "error",
+                "message": f"File tidak ditemukan:\n{raw_path}",
+            }
+
+        if not os.path.exists(calibrated_path):
+            return {
+                "status": "error",
+                "message": f"File tidak ditemukan:\n{calibrated_path}",
+            }
+
+        df_raw = pd.read_csv(raw_path)
+        df_cal = pd.read_csv(calibrated_path)
+        raw_signal = df_raw[col if col in df_raw.columns else "ch1"].to_numpy(dtype=float)
+        gt_signal = df_cal[col if col in df_cal.columns else "ch1"].to_numpy(dtype=float)
+
+        if "time" in df_raw.columns:
+            time_axis = df_raw["time"].to_numpy(dtype=float)
+        else:
+            time_axis = np.arange(len(raw_signal)) / float(fs)
 
     # ============================================================
     # HEART RATE ANALYSIS
@@ -110,8 +145,9 @@ def run_dsp_distortion_analysis(
     # ============================================================
     # FFT ANALYSIS
     # ============================================================
-    n = len(raw_signal)
-    fft_values = np.fft.rfft(raw_signal)
+    fft_signal = raw_signal if raw_signal is not None else gt_signal
+    n = len(fft_signal)
+    fft_values = np.fft.rfft(fft_signal)
     fft_freqs = np.fft.rfftfreq(
         n,
         d=1.0 / fs,
@@ -202,6 +238,42 @@ def run_dsp_distortion_analysis(
         results["attenuation_median_pct"] = 0.0
 
     # ============================================================
+    # SPECTRAL ANALYSIS (Welch PSD pada sinyal calibrated)
+    # ============================================================
+    nperseg = int(min(1024, max(16, len(gt_signal))))
+    freqs_w, psd = signal.welch(gt_signal, fs=fs, nperseg=nperseg)
+    dfreq = float(freqs_w[1] - freqs_w[0]) if len(freqs_w) > 1 else 1.0
+    nyq = fs * 0.5
+
+    band_defs = (
+        ("0.5-5", 0.5, min(5.0, nyq)),
+        ("5-15", 5.0, min(15.0, nyq)),
+        ("15-40", 15.0, min(40.0, nyq)),
+    )
+
+    core_mask = (freqs_w >= 0.5) & (freqs_w <= min(40.0, nyq))
+    core_power = float(np.sum(psd[core_mask]) * dfreq) if np.any(core_mask) else 0.0
+
+    band_parts = []
+    for band_name, band_lo, band_hi in band_defs:
+        if band_hi <= band_lo:
+            band_parts.append(f"{band_name}:0.0%")
+            continue
+        band_mask = (freqs_w >= band_lo) & (freqs_w < band_hi)
+        band_power = float(np.sum(psd[band_mask]) * dfreq) if np.any(band_mask) else 0.0
+        band_pct = (band_power / core_power * 100.0) if core_power > 0 else 0.0
+        band_parts.append(f"{band_name}:{band_pct:.1f}%")
+
+    heart_mask = (freqs_w >= 0.5) & (freqs_w <= min(5.0, nyq))
+    if np.any(heart_mask):
+        dominant_hz = float(freqs_w[heart_mask][np.argmax(psd[heart_mask])])
+    else:
+        dominant_hz = 0.0
+
+    results["spectral_dominant_hz"] = round(dominant_hz, 2)
+    results["spectral_bands_pct"] = " | ".join(band_parts)
+
+    # ============================================================
     # VISUALIZATION
     # ============================================================
     fig, axes = plt.subplots(
@@ -212,32 +284,46 @@ def run_dsp_distortion_analysis(
 
     # ------------------------------------------------------------
 
-    axes[0].plot(
-        time_axis[:1250],
-        raw_signal[:1250],
-        color="#8e8e93",
-        alpha=0.6,
-        label="Raw ADC",
-    )
+    if already_calibrated:
+        axes[0].plot(
+            time_axis[:1250],
+            gt_signal[:1250],
+            color="#0071e3",
+            linewidth=1.2,
+            label="Calibrated (mV)",
+        )
+        axes[0].set_title(
+            f"Calibrated Signal (kalibrasi dilewati) - Lead {lead + 1}",
+            fontweight="bold",
+        )
+        axes[0].legend(loc="upper left")
+    else:
+        axes[0].plot(
+            time_axis[:1250],
+            raw_signal[:1250],
+            color="#8e8e93",
+            alpha=0.6,
+            label="Raw ADC",
+        )
 
-    twin = axes[0].twinx()
+        twin = axes[0].twinx()
 
-    twin.plot(
-        time_axis[:1250],
-        gt_signal[:1250],
-        color="#0071e3",
-        linewidth=1.2,
-        label="Calibrated (mV)",
-    )
+        twin.plot(
+            time_axis[:1250],
+            gt_signal[:1250],
+            color="#0071e3",
+            linewidth=1.2,
+            label="Calibrated (mV)",
+        )
 
-    axes[0].set_title(
-        "ADC vs Calibrated Signal",
-        fontweight="bold",
-    )
+        axes[0].set_title(
+            f"ADC vs Calibrated Signal - Lead {lead + 1}",
+            fontweight="bold",
+        )
 
-    axes[0].grid(True, linestyle=":")
-    axes[0].legend(loc="upper left")
-    twin.legend(loc="upper right")
+        axes[0].grid(True, linestyle=":")
+        axes[0].legend(loc="upper left")
+        twin.legend(loc="upper right")
 
     # ------------------------------------------------------------
 
@@ -321,6 +407,9 @@ def run_dsp_distortion_analysis(
 
     # ============================================================
 
+    results["lead"] = lead + 1
+    results["lead_label"] = f"LEAD {lead + 1}"
+    results["fs_used"] = float(fs)
     results["image"] = image
     results["status"] = "success"
     return results

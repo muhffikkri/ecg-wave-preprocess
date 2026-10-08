@@ -497,20 +497,16 @@ def api_convert_to_jsonl(
 
 
 # =====================================================================
-# SIMULATOR FOLDER
+# SIMULATOR FOLDER (lookup folder dataset & simulator, sumber sama dgn Tab 1)
 # =====================================================================
 @app.get("/api/simulator/folders")
 def api_simulator_folders():
-    simulator_dir = cfg.PROSIM_SIMULATOR_DIR
-    if not os.path.exists(simulator_dir):
-        return []
-    folders = [
-        f
-        for f in os.listdir(simulator_dir)
-        if os.path.isdir(os.path.join(simulator_dir, f))
+    records = get_available_records()
+    return [
+        {"dataset": name, "records": recs}
+        for name, recs in records.items()
+        if recs
     ]
-    folders.sort()
-    return folders
 
 
 # =====================================================================
@@ -518,7 +514,9 @@ def api_simulator_folders():
 # =====================================================================
 @app.get("/api/simulator/analyze")
 def api_simulator_analysis(
-    folder_name: str,
+    source: str,
+    lead: int = 0,
+    already_calibrated: bool = False,
     target_fs: float = cfg.TARGET_FS,
     wavelet: str = cfg.WAVELET_DEFAULT,
     w_level: int = cfg.WAVELET_LEVEL_DEFAULT,
@@ -526,19 +524,44 @@ def api_simulator_analysis(
     lowcut: float = cfg.BUTTERWORTH_LOWCUT,
     highcut: float = cfg.BUTTERWORTH_HIGHCUT_DEFAULT,
 ):
-    folder = os.path.join(
-        cfg.PROSIM_SIMULATOR_DIR,
-        folder_name,
-    )
-    return run_dsp_distortion_analysis(
-        folder_path=folder,
+    """
+    Source format: "dataset::record", contoh:
+      - "prosim_simulator::data60bpm1mvecg" (folder ADC)
+      - "ptbxl_500hz::00001_hr" (data dataset, sudah calibrated)
+    """
+    dataset, sep, record = source.partition("::")
+    if not sep or not dataset or not record:
+        return {"status": "error", "message": f"Source tidak valid: {source}"}
+
+    lead_i = max(0, int(lead))
+    args = dict(
         fs=float(target_fs),
+        lead=lead_i,
+        already_calibrated=already_calibrated,
         p_wavelet=wavelet,
         p_w_level=w_level,
         p_median_kernel=median_kernel,
         p_lowcut=lowcut,
         p_highcut=highcut,
     )
+
+    # Folder ADC ProSim — mode default membandingkan raw vs calibrated
+    if dataset == "prosim_simulator":
+        folder = os.path.join(cfg.PROSIM_SIMULATOR_DIR, record)
+        return run_dsp_distortion_analysis(folder_path=folder, **args)
+
+    # Lookup folder dataset seperti Tab 1 — data sudah dalam mV
+    try:
+        signal_2d, fs_native = load_raw_signal(dataset, record)
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+    lead_i = min(lead_i, signal_2d.shape[1] - 1)
+    x = apply_poly_resample(signal_2d[:, lead_i], fs_native, float(target_fs))
+    args["lead"] = lead_i
+    # Data dataset selalu sudah dalam mV — jalur kalibrasi ADC tidak tersedia
+    args["already_calibrated"] = True
+    return run_dsp_distortion_analysis(signal_mv=x, **args)
 
 
 # =====================================================================

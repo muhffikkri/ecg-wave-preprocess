@@ -403,6 +403,43 @@ body {
   font-weight: normal;
 }
 
+/* Tab 2: seluruh analisis DSP disatukan dalam 1 row grid */
+.sim-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.sim-metric {
+  background: var(--glass-well);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: var(--shadow-inset);
+}
+
+.sim-metric-lbl {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--glass-muted);
+}
+
+.sim-metric .holter-val {
+  font-size: 1.3rem;
+  margin-top: 6px;
+}
+
+.sim-spectral-sub {
+  font-size: 0.72rem;
+  color: var(--glass-muted);
+  font-family: monospace;
+  margin-top: 4px;
+  line-height: 1.35;
+}
+
 /* Container Vertikal Utama untuk Mengunci Teks Diagnosa Super Panjang */
 .comparison-vertical-flex {
   display: flex;

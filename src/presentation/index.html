@@ -12,7 +12,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
   <!-- Path disesuaikan untuk FastAPI Mounting Static -->
-  <link rel="stylesheet" href="/static/style.css?v=1.3.0" />
+  <link rel="stylesheet" href="/static/style.css?v=1.5.0" />
 </head>
 
 <body>
@@ -400,8 +400,25 @@
 
     <div class="config-container">
       <div class="control-group" style="grid-column: span 2">
-        <label>Simulator Folder</label>
-        <select id="sim_folder_select"></select>
+        <label>Dataset / Simulator Folder</label>
+        <select id="sim_folder_select" onchange="onSimulatorSourceChange()"></select>
+      </div>
+
+      <div class="control-group">
+        <label>Lead</label>
+        <select id="sim_lead">
+          <option value="0">Lead 1</option>
+          <option value="1">Lead 2</option>
+          <option value="2">Lead 3</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>Kalibrasi</label>
+        <label class="filter-toggle" title="Data dari dataset sudah dalam mV — rekalkulasi kalibrasi ADC dilewati">
+          <input type="checkbox" id="sim_already_calibrated" />
+          <span>Sudah calibrated (lewati rekalkulasi)</span>
+        </label>
       </div>
 
       <div class="control-group">
@@ -444,21 +461,31 @@
 
     <!-- Perbaikan 2: Mengembalikan sim_metrics_grid & sim_recommendation_card -->
     <div id="sim_metrics_grid" class="holter-dashboard" style="margin-top: 20px; display: grid">
-      <div class="holter-card">
-        <div class="metric-title">SIMULATED BPM</div>
-        <div class="holter-val" id="sim_val_bpm">--<span class="holter-unit"> BPM</span></div>
-      </div>
-      <div class="holter-card">
-        <div class="metric-title">SIMULATED RR</div>
-        <div class="holter-val" id="sim_val_rr">--<span class="holter-unit"> ms</span></div>
-      </div>
-      <div class="holter-card">
-        <div class="metric-title">ESTIMATED NOISE</div>
-        <div class="holter-val" id="sim_val_noise">--<span class="holter-unit"> uV</span></div>
-      </div>
-      <div class="holter-card">
-        <div class="metric-title">ATTENUATION RATE</div>
-        <div class="holter-val" id="sim_val_attenuation">--<span class="holter-unit"> dB</span></div>
+      <div class="holter-card holter-wide">
+        <div class="metric-title">DSP ANALYSIS &mdash; <span id="sim_lead_label">LEAD 1</span></div>
+        <div class="sim-metrics-row">
+          <div class="sim-metric">
+            <div class="sim-metric-lbl">SIMULATED BPM</div>
+            <div class="holter-val" id="sim_val_bpm">--<span class="holter-unit"> BPM</span></div>
+          </div>
+          <div class="sim-metric">
+            <div class="sim-metric-lbl">SIMULATED RR</div>
+            <div class="holter-val" id="sim_val_rr">--<span class="holter-unit"> detik</span></div>
+          </div>
+          <div class="sim-metric">
+            <div class="sim-metric-lbl">ESTIMATED NOISE</div>
+            <div class="holter-val" id="sim_val_noise">--<span class="holter-unit"> Hz</span></div>
+          </div>
+          <div class="sim-metric">
+            <div class="sim-metric-lbl">ATTENUATION RATE</div>
+            <div class="holter-val" id="sim_val_attenuation">--<span class="holter-unit"> %</span></div>
+          </div>
+          <div class="sim-metric">
+            <div class="sim-metric-lbl">SPECTRAL ANALYSIS</div>
+            <div class="holter-val" id="sim_val_spectral">--<span class="holter-unit"> Hz</span></div>
+            <div class="sim-spectral-sub" id="sim_val_spectral_sub">&nbsp;</div>
+          </div>
+        </div>
       </div>
       <div id="sim_recommendation_card" class="holter-card holter-wide"
         style="text-align: left; background: #fffdf0; border-left: 5px solid #ffcc00; padding: 15px">
@@ -476,7 +503,7 @@
   </div>
 
   <!-- JavaScript Path Terintegrasi FastAPI -->
-  <script src="/static/script.js?v=1.4.0"></script>
+  <script src="/static/script.js?v=1.5.0"></script>
 </body>
 
 </html>
