@@ -331,6 +331,9 @@ def advanced_cleaning_pipeline_offline(
     p_median_kernel=None,
     p_lowcut=None,
     p_highcut=None,
+    p_use_wavelet=True,
+    p_use_median=True,
+    p_use_bandpass=True,
 ):
     """
     PIPELINE:
@@ -360,35 +363,38 @@ def advanced_cleaning_pipeline_offline(
         highcut = cfg.BUTTERWORTH_HIGHCUT_250 if src_fs >= 250 else cfg.BUTTERWORTH_HIGHCUT_DEFAULT
 
     # =====================================================
-    # 1. Wavelet Denoising
+    # 1. Wavelet Denoising (bisa dilewati via p_use_wavelet)
     # =====================================================
 
-    x = apply_wavelet_denoising(
-        x,
-        wavelet=wavelet,
-        level=w_level
-    )
+    if p_use_wavelet:
+        x = apply_wavelet_denoising(
+            x,
+            wavelet=wavelet,
+            level=w_level
+        )
 
     # =====================================================
-    # 2. Baseline Correction
+    # 2. Baseline Correction (bisa dilewati via p_use_median)
     # =====================================================
 
-    x = apply_median_baseline(
-        x,
-        kernel_size=kernel_size
-    )
+    if p_use_median:
+        x = apply_median_baseline(
+            x,
+            kernel_size=kernel_size
+        )
 
     # =====================================================
-    # 3. Bandpass
+    # 3. Bandpass (bisa dilewati via p_use_bandpass)
     # =====================================================
 
-    x = apply_butter_bandpass(
-        x,
-        fs=src_fs,
-        lowcut=lowcut,
-        highcut=highcut,
-        order=4
-    )
+    if p_use_bandpass:
+        x = apply_butter_bandpass(
+            x,
+            fs=src_fs,
+            lowcut=lowcut,
+            highcut=highcut,
+            order=4
+        )
 
     # =====================================================
     # 4. Resample
@@ -423,6 +429,9 @@ def advanced_cleaning_pipeline_upsampling(
     p_median_kernel=None,
     p_lowcut=None,
     p_highcut=None,
+    p_use_wavelet=True,
+    p_use_median=True,
+    p_use_bandpass=True,
 ):
     """
     PIPELINE:
@@ -454,35 +463,38 @@ def advanced_cleaning_pipeline_upsampling(
     )
 
     # =====================================================
-    # 2. Wavelet
+    # 2. Wavelet (bisa dilewati via p_use_wavelet)
     # =====================================================
 
-    x = apply_wavelet_denoising(
-        x,
-        wavelet=wavelet,
-        level=w_level
-    )
+    if p_use_wavelet:
+        x = apply_wavelet_denoising(
+            x,
+            wavelet=wavelet,
+            level=w_level
+        )
 
     # =====================================================
-    # 3. Baseline
+    # 3. Baseline (bisa dilewati via p_use_median)
     # =====================================================
 
-    x = apply_median_baseline(
-        x,
-        kernel_size=kernel_size
-    )
+    if p_use_median:
+        x = apply_median_baseline(
+            x,
+            kernel_size=kernel_size
+        )
 
     # =====================================================
-    # 4. Bandpass
+    # 4. Bandpass (bisa dilewati via p_use_bandpass)
     # =====================================================
 
-    x = apply_butter_bandpass(
-        x,
-        fs=target_fs,
-        lowcut=lowcut,
-        highcut=highcut,
-        order=4
-    )
+    if p_use_bandpass:
+        x = apply_butter_bandpass(
+            x,
+            fs=target_fs,
+            lowcut=lowcut,
+            highcut=highcut,
+            order=4
+        )
 
     # =====================================================
     # 5. Normalize (Removed to prevent double normalization)
@@ -505,6 +517,9 @@ def advanced_cleaning_pipeline(
     p_median_kernel=None,
     p_lowcut=None,
     p_highcut=None,
+    p_use_wavelet=True,
+    p_use_median=True,
+    p_use_bandpass=True,
 ):
     """
     SMART ROUTER.
@@ -534,6 +549,9 @@ def advanced_cleaning_pipeline(
             p_median_kernel=p_median_kernel,
             p_lowcut=p_lowcut,
             p_highcut=p_highcut,
+            p_use_wavelet=p_use_wavelet,
+            p_use_median=p_use_median,
+            p_use_bandpass=p_use_bandpass,
         )
 
     else:
@@ -547,6 +565,9 @@ def advanced_cleaning_pipeline(
             p_median_kernel=p_median_kernel,
             p_lowcut=p_lowcut,
             p_highcut=p_highcut,
+            p_use_wavelet=p_use_wavelet,
+            p_use_median=p_use_median,
+            p_use_bandpass=p_use_bandpass,
         )
 
 

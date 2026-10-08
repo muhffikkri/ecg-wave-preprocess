@@ -12,7 +12,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
   <!-- Path disesuaikan untuk FastAPI Mounting Static -->
-  <link rel="stylesheet" href="/static/style.css?v=1.1.0" />
+  <link rel="stylesheet" href="/static/style.css?v=1.3.0" />
 </head>
 
 <body>
@@ -35,12 +35,12 @@
     <div class="header-panel">
       <div>
         <div style="font-size: 1.4em; font-weight: bold; color: #1d1d1f">Wearable ECG Edge Computing Workbench</div>
-        <div style="color: #566274; font-size: 0.85em; margin-top: 4px">Klinis Standar: 25 mm/s | 10 mm/mV | Grid Besar
-          (0.2s), Grid Kecil (0.04s)</div>
+        <div style="color: #566274; font-size: 0.85em; margin-top: 4px">Gain 5/10/20 mm/mV &middot; Speed
+          12.5/25/50 mm/s &middot; Grid Besar (0.2s), Grid Kecil (0.04s)</div>
       </div>
     </div>
 
-    <!-- ECG CANVAS GRAPH : SATU KANVAS PER LEAD, OVERLAY RAW + FILTERED -->
+    <!-- ECG CANVAS GRAPH : SATU KANVAS BESAR, 3 LEAD DALAM BAND TERPISAH (skala per-lead) -->
     <div class="grid-canvas">
       <div class="chart-toolbar">
         <label class="toggle-signal raw">
@@ -51,21 +51,31 @@
           <input type="checkbox" id="tgl_clean" checked onchange="toggleSignal('clean', this.checked)" />
           <span>FILTERED</span>
         </label>
+
+        <div class="seg-group">
+          <span class="seg-lbl">GAIN (mm/mV)</span>
+          <button class="seg-btn" data-gain="5" onclick="setGain(5)">5</button>
+          <button class="seg-btn active" data-gain="10" onclick="setGain(10)">10</button>
+          <button class="seg-btn" data-gain="20" onclick="setGain(20)">20</button>
+        </div>
+
+        <div class="seg-group">
+          <span class="seg-lbl">SPEED (mm/s)</span>
+          <button class="seg-btn" data-speed="12.5" onclick="setSpeed(12.5)">12.5</button>
+          <button class="seg-btn active" data-speed="25" onclick="setSpeed(25)">25</button>
+          <button class="seg-btn" data-speed="50" onclick="setSpeed(50)">50</button>
+        </div>
+
         <button class="btn-tool" onclick="resetZoomAll()">RESET ZOOM</button>
-        <span class="toolbar-hint">Scroll: zoom &middot; Seret: geser &middot; Klik ganda: zoom in</span>
+        <span class="toolbar-hint">Scroll: zoom &middot; Seret: geser (horizontal + vertikal) &middot; Klik ganda: zoom in</span>
       </div>
 
-      <!-- LEAD I -->
-      <div class="lead-label">CHANNEL 1 : LEAD I</div>
-      <div class="chart-container"><canvas id="lead_chart_0"></canvas></div>
-
-      <!-- LEAD II -->
-      <div class="lead-label">CHANNEL 2 : LEAD II</div>
-      <div class="chart-container"><canvas id="lead_chart_1"></canvas></div>
-
-      <!-- LEAD III -->
-      <div class="lead-label">CHANNEL 3 : LEAD III</div>
-      <div class="chart-container"><canvas id="lead_chart_2"></canvas></div>
+      <!-- 3 KANVAS PER LEAD, MENEMPEL TANPA JARAK (gutter label di tiap kanvas) -->
+      <div class="chart-stack">
+        <div class="chart-container"><canvas id="lead_chart_0"></canvas></div>
+        <div class="chart-container"><canvas id="lead_chart_1"></canvas></div>
+        <div class="chart-container"><canvas id="lead_chart_2"></canvas></div>
+      </div>
     </div>
 
     <!-- ========================================================= -->
@@ -263,6 +273,15 @@
           <span id="ai_conf" style="display: none"></span>
         </div>
       </div>
+
+      <!-- Hardware Performance (menempel dekat Comparative AI Inference) -->
+      <div class="holter-card holter-wide">
+        <div class="metric-title">HARDWARE PERFORMANCE</div>
+        <div class="hardware-metrics">
+          <div class="metric-item">Latency : <span id="val_latency">-- ms</span></div>
+          <div class="metric-item">Peak Memory : <span id="val_memory">-- MB</span></div>
+        </div>
+      </div>
     </div>
 
     <!-- CONFIG PANEL -->
@@ -341,13 +360,24 @@
         </select>
       </div>
 
-
-      <!-- Hardware Metrics & Action Buttons -->
-      <div class="hardware-metrics">
-        <div class="metric-item">Latency : <span id="val_latency">-- ms</span></div>
-        <div class="metric-item">Peak Memory : <span id="val_memory">-- MB</span></div>
+      <!-- Toggle per tahap filter: matikan = input terkait disabled -->
+      <div class="filter-toggles">
+        <span class="filter-toggles-lbl">FILTER STAGES</span>
+        <label class="filter-toggle">
+          <input type="checkbox" id="use_wavelet" checked onchange="toggleFilter('wavelet', this.checked)" />
+          <span>Wavelet</span>
+        </label>
+        <label class="filter-toggle">
+          <input type="checkbox" id="use_median" checked onchange="toggleFilter('median', this.checked)" />
+          <span>Median Baseline</span>
+        </label>
+        <label class="filter-toggle">
+          <input type="checkbox" id="use_bandpass" checked onchange="toggleFilter('bandpass', this.checked)" />
+          <span>Bandpass</span>
+        </label>
       </div>
 
+      <!-- Action Buttons -->
       <div style="display: flex; gap: 10px; width: 100%; flex: 1 1 100%;">
         <button class="btn-update" onclick="triggerProcessing()">UPDATE PIPELINE</button>
         <button id="btn_save_csv" class="btn-update btn-green" onclick="saveFilteredCSV()">SAVE CSV</button>
@@ -446,7 +476,7 @@
   </div>
 
   <!-- JavaScript Path Terintegrasi FastAPI -->
-  <script src="/static/script.js?v=1.1.0"></script>
+  <script src="/static/script.js?v=1.4.0"></script>
 </body>
 
 </html>

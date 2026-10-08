@@ -97,6 +97,9 @@ def api_process(
     model_id: str = cfg.DEFAULT_MODEL_ID,
     save_frames: bool = False,
     use_raw_for_ai: bool = False,
+    use_wavelet: bool = True,
+    use_median: bool = True,
+    use_bandpass: bool = True,
 ):
     t_start = time.perf_counter()
 
@@ -114,6 +117,7 @@ def api_process(
     logger.info(f"sampling rate: {src_fs} Hz")
     logger.info(f"pipeline yang dipilih: {'upsampling' if src_fs < target_fs else 'offline'}")
     logger.info(f"parameter preprocessing: wavelet={wavelet}, level={w_level}, median_kernel={median_kernel}, lowcut={lowcut}, highcut={highcut}, model_id={model_id}, save_frames={save_frames}, use_raw_for_ai={use_raw_for_ai}")
+    logger.info(f"filter on/off: wavelet={use_wavelet}, median={use_median}, bandpass={use_bandpass}")
 
     # Run clean pipeline (steps 1-7)
     clean_signal, metrics = execute_live_pipeline(
@@ -128,6 +132,9 @@ def api_process(
         save_frames=save_frames,
         record_id=record_id,
         file_format="csv" if save_frames else "npy",
+        use_wavelet=use_wavelet,
+        use_median=use_median,
+        use_bandpass=use_bandpass,
     )
 
     # Decide whether to feed raw or filtered signal to the AI model
@@ -235,6 +242,9 @@ def api_save_frames(
     highcut: float = cfg.BUTTERWORTH_HIGHCUT_DEFAULT,
     file_format: str = "csv",
     frame_size: int = cfg.MODEL_INPUT_LENGTH,
+    use_wavelet: bool = True,
+    use_median: bool = True,
+    use_bandpass: bool = True,
 ):
     raw_signal, src_fs = load_raw_signal(dataset, record_id)
     clean_signal, metrics = execute_live_pipeline(
@@ -250,6 +260,9 @@ def api_save_frames(
         record_id=record_id,
         frame_size=frame_size,
         file_format=file_format,
+        use_wavelet=use_wavelet,
+        use_median=use_median,
+        use_bandpass=use_bandpass,
     )
     saved_info = metrics.get("saved_frames", {})
     return {
@@ -274,6 +287,9 @@ def api_download_csv(
     lowcut: float = cfg.BUTTERWORTH_LOWCUT,
     highcut: float = cfg.BUTTERWORTH_HIGHCUT_DEFAULT,
     frame_size: int = cfg.MODEL_INPUT_LENGTH,
+    use_wavelet: bool = True,
+    use_median: bool = True,
+    use_bandpass: bool = True,
 ):
     raw_signal, src_fs = load_raw_signal(dataset, record_id)
     clean_signal, metrics = execute_live_pipeline(
@@ -289,6 +305,9 @@ def api_download_csv(
         record_id=record_id,
         frame_size=frame_size,
         file_format="csv",
+        use_wavelet=use_wavelet,
+        use_median=use_median,
+        use_bandpass=use_bandpass,
     )
     saved_files = metrics.get("saved_frames", {}).get("saved_files", [])
     csv_file = None
@@ -323,6 +342,9 @@ def api_convert_to_jsonl(
     model_id: str = cfg.DEFAULT_MODEL_ID,
     device_id: str = "device01",
     session_id: str = None,
+    use_wavelet: bool = True,
+    use_median: bool = True,
+    use_bandpass: bool = True,
 ):
     import json
     import datetime
@@ -349,6 +371,9 @@ def api_convert_to_jsonl(
             p_highcut=highcut,
             save_frames=False,
             record_id=record_id,
+            use_wavelet=use_wavelet,
+            use_median=use_median,
+            use_bandpass=use_bandpass,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal memproses DSP: {e}")

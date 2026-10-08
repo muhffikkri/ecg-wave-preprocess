@@ -250,6 +250,9 @@ def execute_live_pipeline(
     record_id: str = "record",
     frame_size: int = cfg.MODEL_INPUT_LENGTH,
     file_format: str = "csv",
+    use_wavelet: bool = True,
+    use_median: bool = True,
+    use_bandpass: bool = True,
 ):
     """
     Eksekusi Murni Parameter UI Workbench Tanpa Pemaksaan Logika Alur di Backend.
@@ -278,6 +281,9 @@ def execute_live_pipeline(
         p_median_kernel=p_median_kernel,
         p_lowcut=p_lowcut,
         p_highcut=p_highcut,
+        p_use_wavelet=use_wavelet,
+        p_use_median=use_median,
+        p_use_bandpass=use_bandpass,
     )
 
     t1 = time.perf_counter()

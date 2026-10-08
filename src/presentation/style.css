@@ -73,6 +73,17 @@ body {
   align-items: flex-end;
 }
 
+/* Panel entri & filter Tab 1 menempel di bawah viewport,
+   bisa diatur sambil melihat grafik yang bergulir di atasnya */
+#view_tab_1 .config-container {
+  position: sticky;
+  bottom: 14px;
+  z-index: 40;
+  max-height: 46vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 40px rgba(40, 58, 92, 0.28);
+}
+
 .control-group {
   display: flex;
   flex-direction: column;
@@ -131,7 +142,7 @@ body {
 }
 
 /* =========================================================================
-   3. MULTI-CHANNEL GRAPH CANVAS (ONE FULL-WIDTH CANVAS PER LEAD)
+   3. MULTI-CHANNEL GRAPH CANVAS (SATU KANVAS BESAR, 3 LEAD DALAM BAND)
    ========================================================================= */
 .grid-canvas {
   display: flex;
@@ -213,24 +224,125 @@ body {
   box-shadow: var(--shadow-inset);
 }
 
-.lead-label {
-  font-size: 0.9rem;
-  font-weight: bold;
-  color: var(--glass-text);
-  background: var(--glass-bg);
-  box-shadow: var(--shadow-inset);
-  padding: 9px 14px;
+/* Segmented control: Gain & Speed (ergonomi panel klinis) */
+.seg-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
   border-radius: 12px;
-  margin-top: 6px;
+  background: var(--glass-well);
+  box-shadow: var(--shadow-inset);
+}
+
+.seg-lbl {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--glass-muted);
+  margin-right: 4px;
+}
+
+.seg-btn {
+  border: none;
+  cursor: pointer;
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--glass-muted);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.seg-btn:hover {
+  color: var(--glass-text);
+}
+
+.seg-btn.active {
+  background: var(--glass-accent);
+  color: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+/* Toggle per tahap filter (Wavelet / Median / Bandpass) */
+.filter-toggles {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 100%;
+  padding: 9px 13px;
+  border-radius: 12px;
+  background: var(--glass-well);
+  box-shadow: var(--shadow-inset);
+}
+
+.filter-toggles-lbl {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--glass-muted);
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--glass-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-toggle input {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--glass-accent);
+}
+
+/* Input filter yang dimatikan lewat toggle */
+.control-group.is-disabled {
+  opacity: 0.5;
+}
+
+.control-group select:disabled,
+.control-group input:disabled {
+  cursor: not-allowed;
 }
 
 .chart-container {
   position: relative;
-  height: 320px;
   background: var(--glass-well);
   box-shadow: var(--shadow-inset);
+  overflow: hidden;
+}
+
+/* 3 kanvas per lead menempel tanpa jarak: satu blok kaca, radius hanya di ujung */
+.chart-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--glass-edge);
   border-radius: 14px;
   overflow: hidden;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.chart-stack .chart-container {
+  height: 240px;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid var(--glass-line);
+}
+
+.chart-stack .chart-container:first-child {
+  border-top: none;
 }
 
 /* =========================================================================
@@ -601,10 +713,11 @@ body {
 .btn-tool,
 .btn-update,
 .event-tag,
-.lead-label,
+.seg-group,
 .slider-val,
 .hardware-metrics,
-.chart-container,
+.chart-stack,
+.filter-toggles,
 .control-group select,
 .control-group input[type="number"],
 .control-group input[type="text"] {
